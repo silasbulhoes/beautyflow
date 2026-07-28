@@ -36,9 +36,7 @@ export default function ServicosPage() {
             ← Voltar ao painel
           </Link>
 
-          <h1 className="mt-4 text-3xl font-semibold">
-            Serviços
-          </h1>
+          <h1 className="mt-4 text-3xl font-semibold">Serviços</h1>
 
           <p className="mt-2 text-muted-foreground">
             Cadastre os serviços que suas clientes poderão agendar.
@@ -48,6 +46,7 @@ export default function ServicosPage() {
         <Card>
           <CardHeader>
             <CardTitle>Novo serviço</CardTitle>
+
             <CardDescription>
               Informe o preço, a duração e o valor do sinal.
             </CardDescription>
@@ -57,6 +56,7 @@ export default function ServicosPage() {
             <form action={formAction} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="name">Nome do serviço</Label>
+
                 <Input
                   id="name"
                   name="name"
@@ -66,9 +66,8 @@ export default function ServicosPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">
-                  Descrição
-                </Label>
+                <Label htmlFor="description">Descrição</Label>
+
                 <Textarea
                   id="description"
                   name="description"
@@ -81,6 +80,7 @@ export default function ServicosPage() {
                   <Label htmlFor="durationMinutes">
                     Duração em minutos
                   </Label>
+
                   <Input
                     id="durationMinutes"
                     name="durationMinutes"
@@ -93,6 +93,7 @@ export default function ServicosPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="price">Preço em reais</Label>
+
                   <Input
                     id="price"
                     name="price"
@@ -108,6 +109,7 @@ export default function ServicosPage() {
                   <Label htmlFor="depositPercentage">
                     Sinal em %
                   </Label>
+
                   <Input
                     id="depositPercentage"
                     name="depositPercentage"
