@@ -9,12 +9,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { createPublicClient } from "@/lib/supabase/public";
 
 type EscolherHorarioPageProps = {
   params: Promise<{
     slug: string;
     serviceId: string;
+  }>;
+  searchParams: Promise<{
+    data?: string;
   }>;
 };
 
@@ -54,10 +59,43 @@ function formatTime(value: string) {
   return value.slice(0, 5);
 }
 
+function isValidDateString(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function getTodayString() {
+  const today = new Date();
+
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatSelectedDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(year, month - 1, day, 12));
+}
+
 export default async function EscolherHorarioPage({
   params,
+  searchParams,
 }: EscolherHorarioPageProps) {
   const { slug, serviceId } = await params;
+  const { data: selectedDateParam } = await searchParams;
+
+  const selectedDate =
+    typeof selectedDateParam === "string" &&
+    isValidDateString(selectedDateParam)
+      ? selectedDateParam
+      : null;
 
   const supabase = createPublicClient();
 
@@ -86,28 +124,37 @@ export default async function EscolherHorarioPage({
     notFound();
   }
 
-  const { data: schedules, error } = await supabase
-    .from("business_hours")
-    .select("id, weekday, start_time, end_time")
-    .eq("company_id", company.id)
-    .eq("active", true)
-    .order("weekday", {
-      ascending: true,
-    })
-    .order("start_time", {
-      ascending: true,
-    });
+  let schedules:
+    | Array<{
+        id: string;
+        weekday: number;
+        start_time: string;
+        end_time: string;
+      }>
+    | null = null;
 
-  const schedulesByWeekday = Array.from(
-    { length: 7 },
-    (_, weekday) => ({
-      weekday,
-      schedules:
-        schedules?.filter(
-          (schedule) => schedule.weekday === weekday,
-        ) ?? [],
-    }),
-  ).filter((day) => day.schedules.length > 0);
+  let scheduleError = false;
+  let selectedWeekday: number | null = null;
+
+  if (selectedDate) {
+    const [year, month, day] = selectedDate.split("-").map(Number);
+    const parsedDate = new Date(year, month - 1, day, 12);
+
+    selectedWeekday = parsedDate.getDay();
+
+    const { data, error } = await supabase
+      .from("business_hours")
+      .select("id, weekday, start_time, end_time")
+      .eq("company_id", company.id)
+      .eq("weekday", selectedWeekday)
+      .eq("active", true)
+      .order("start_time", {
+        ascending: true,
+      });
+
+    schedules = data;
+    scheduleError = Boolean(error);
+  }
 
   const depositAmount = Math.round(
     service.price_cents * (service.deposit_percentage / 100),
@@ -141,11 +188,12 @@ export default async function EscolherHorarioPage({
           </p>
 
           <h2 className="mt-2 text-3xl font-semibold">
-            Escolha o horário
+            Escolha a data e o horário
           </h2>
 
           <p className="mt-2 text-muted-foreground">
-            Selecione um dos períodos disponíveis para continuar.
+            Primeiro escolha o dia. Depois serão mostrados apenas os horários
+            disponíveis para esse dia da semana.
           </p>
         </div>
 
@@ -184,54 +232,96 @@ export default async function EscolherHorarioPage({
           </CardContent>
         </Card>
 
-        {error ? (
-          <p className="mt-8 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Não foi possível carregar os horários.
-          </p>
-        ) : null}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarDays className="size-5" />
+              Data do atendimento
+            </CardTitle>
 
-        {!error && schedulesByWeekday.length === 0 ? (
-          <Card className="mt-8">
-            <CardContent className="py-12 text-center">
-              <p className="font-medium">
-                Nenhum horário disponível no momento.
+            <CardDescription>
+              Selecione a data em que deseja ser atendida.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent>
+            <form method="get" className="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <div className="w-full space-y-2">
+                <Label htmlFor="data">Escolha a data</Label>
+
+                <Input
+                  id="data"
+                  name="data"
+                  type="date"
+                  min={getTodayString()}
+                  defaultValue={selectedDate ?? ""}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90"
+              >
+                Ver horários
+              </button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {selectedDate ? (
+          <section className="mt-8">
+            <div>
+              <h3 className="text-xl font-semibold">
+                Horários para {formatSelectedDate(selectedDate)}
+              </h3>
+
+              {selectedWeekday !== null ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Dia configurado: {weekdayNames[selectedWeekday]}
+                </p>
+              ) : null}
+            </div>
+
+            {scheduleError ? (
+              <p className="mt-5 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                Não foi possível carregar os horários.
               </p>
-            </CardContent>
-          </Card>
+            ) : null}
+
+            {!scheduleError && schedules?.length === 0 ? (
+              <Card className="mt-5">
+                <CardContent className="py-10 text-center">
+                  <p className="font-medium">
+                    Não há horários cadastrados para esse dia.
+                  </p>
+
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Escolha outra data para continuar.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {schedules?.map((schedule) => (
+                <Link
+                  key={schedule.id}
+                  href={`/agendar/${company.slug}/servico/${service.id}/confirmar?data=${selectedDate}&horario=${schedule.id}`}
+                  className="flex items-center justify-between rounded-lg border bg-background px-4 py-4 transition-colors hover:bg-muted"
+                >
+                  <span className="font-medium">
+                    {formatTime(schedule.start_time)}
+                    {" às "}
+                    {formatTime(schedule.end_time)}
+                  </span>
+
+                  <Clock className="size-4 text-muted-foreground" />
+                </Link>
+              ))}
+            </div>
+          </section>
         ) : null}
-
-        <div className="mt-8 space-y-5">
-          {schedulesByWeekday.map(({ weekday, schedules: daySchedules }) => (
-            <Card key={weekday}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarDays className="size-5" />
-                  {weekdayNames[weekday]}
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {daySchedules.map((schedule) => (
-                    <Link
-                      key={schedule.id}
-                      href={`/agendar/${company.slug}/servico/${service.id}/confirmar?horario=${schedule.id}`}
-                      className="flex items-center justify-between rounded-lg border bg-background px-4 py-4 transition-colors hover:bg-muted"
-                    >
-                      <span className="font-medium">
-                        {formatTime(schedule.start_time)}
-                        {" às "}
-                        {formatTime(schedule.end_time)}
-                      </span>
-
-                      <Clock className="size-4 text-muted-foreground" />
-                    </Link>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
       </div>
     </main>
   );
