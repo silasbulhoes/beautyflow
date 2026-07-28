@@ -50,7 +50,7 @@ export default async function PainelPage() {
           <h1 className="text-3xl font-semibold">Olá, {name}</h1>
 
           <p className="mt-2 text-muted-foreground">
-            Gerencie seus serviços, agenda e clientes.
+            Gerencie seus serviços, horários e clientes.
           </p>
         </div>
 
@@ -67,7 +67,9 @@ export default async function PainelPage() {
             <CardContent>
               <Link
                 href="/painel/servicos"
-                className={buttonVariants({ className: "w-full" })}
+                className={buttonVariants({
+                  className: "w-full",
+                })}
               >
                 Gerenciar serviços
               </Link>
@@ -76,17 +78,23 @@ export default async function PainelPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Agenda</CardTitle>
+              <CardTitle>Disponibilidade</CardTitle>
 
               <CardDescription>
-                Visualize e gerencie seus próximos atendimentos.
+                Configure seus dias e horários de atendimento.
               </CardDescription>
             </CardHeader>
 
             <CardContent>
-              <Button className="w-full" variant="outline" disabled>
-                Em breve
-              </Button>
+              <Link
+                href="/painel/disponibilidade"
+                className={buttonVariants({
+                  variant: "outline",
+                  className: "w-full",
+                })}
+              >
+                Gerenciar horários
+              </Link>
             </CardContent>
           </Card>
 
