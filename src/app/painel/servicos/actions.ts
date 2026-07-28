@@ -9,6 +9,42 @@ export type ServiceState = {
   success?: string;
 };
 
+async function obterEmpresaDoUsuario() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      supabase,
+      companyId: null,
+      error: "Sessão expirada. Entre novamente.",
+    };
+  }
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("company_id")
+    .eq("id", user.id)
+    .single();
+
+  if (error || !profile?.company_id) {
+    return {
+      supabase,
+      companyId: null,
+      error: "Não foi possível identificar sua empresa.",
+    };
+  }
+
+  return {
+    supabase,
+    companyId: profile.company_id as string,
+    error: null,
+  };
+}
+
 export async function criarServico(
   _previousState: ServiceState,
   formData: FormData,
@@ -38,43 +74,28 @@ export async function criarServico(
   }
 
   if (
+    Number.isNaN(depositPercentage) ||
     depositPercentage < 0 ||
-    depositPercentage > 100 ||
-    Number.isNaN(depositPercentage)
+    depositPercentage > 100
   ) {
     return {
       error: "O sinal deve ficar entre 0% e 100%.",
     };
   }
 
-  const supabase = await createClient();
+  const { supabase, companyId, error: companyError } =
+    await obterEmpresaDoUsuario();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!companyId) {
     return {
-      error: "Sessão expirada. Entre novamente.",
-    };
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", user.id)
-    .single();
-
-  if (profileError || !profile?.company_id) {
-    return {
-      error: "Não foi possível identificar sua empresa.",
+      error: companyError ?? "Empresa não encontrada.",
     };
   }
 
   const priceCents = Math.round(price * 100);
 
   const { error } = await supabase.from("services").insert({
-    company_id: profile.company_id,
+    company_id: companyId,
     name,
     description: description || null,
     duration_minutes: durationMinutes,
@@ -93,4 +114,29 @@ export async function criarServico(
   return {
     success: "Serviço cadastrado com sucesso.",
   };
+}
+
+export async function alternarStatusServico(formData: FormData) {
+  const serviceId = String(formData.get("serviceId") ?? "");
+  const active = String(formData.get("active")) === "true";
+
+  if (!serviceId) {
+    return;
+  }
+
+  const { supabase, companyId } = await obterEmpresaDoUsuario();
+
+  if (!companyId) {
+    return;
+  }
+
+  await supabase
+    .from("services")
+    .update({
+      active: !active,
+    })
+    .eq("id", serviceId)
+    .eq("company_id", companyId);
+
+  revalidatePath("/painel/servicos");
 }

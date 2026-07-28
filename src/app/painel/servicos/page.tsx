@@ -1,9 +1,8 @@
-"use client";
-
 import Link from "next/link";
-import { useActionState } from "react";
+import { redirect } from "next/navigation";
 
-import { criarServico, type ServiceState } from "./actions";
+import { alternarStatusServico } from "./actions";
+import { ServiceForm } from "./service-form";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,21 +12,49 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { createClient } from "@/lib/supabase/server";
 
-const initialState: ServiceState = {};
+function formatCurrency(valueInCents: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(valueInCents / 100);
+}
 
-export default function ServicosPage() {
-  const [state, formAction, pending] = useActionState(
-    criarServico,
-    initialState,
-  );
+export default async function ServicosPage() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("company_id")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.company_id) {
+    redirect("/painel");
+  }
+
+  const { data: services, error } = await supabase
+    .from("services")
+    .select(
+      "id, name, description, duration_minutes, price_cents, deposit_percentage, active",
+    )
+    .eq("company_id", profile.company_id)
+    .order("created_at", {
+      ascending: false,
+    });
 
   return (
     <main className="min-h-screen bg-muted/30 px-6 py-10">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-5xl">
         <div className="mb-8">
           <Link
             href="/painel"
@@ -39,107 +66,119 @@ export default function ServicosPage() {
           <h1 className="mt-4 text-3xl font-semibold">Serviços</h1>
 
           <p className="mt-2 text-muted-foreground">
-            Cadastre os serviços que suas clientes poderão agendar.
+            Cadastre e gerencie os serviços disponíveis para agendamento.
           </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Novo serviço</CardTitle>
+        <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr]">
+          <ServiceForm />
 
-            <CardDescription>
-              Informe o preço, a duração e o valor do sinal.
-            </CardDescription>
-          </CardHeader>
+          <section>
+            <div className="mb-4">
+              <h2 className="text-xl font-semibold">
+                Serviços cadastrados
+              </h2>
 
-          <CardContent>
-            <form action={formAction} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome do serviço</Label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Serviços desativados não serão exibidos para as clientes.
+              </p>
+            </div>
 
-                <Input
-                  id="name"
-                  name="name"
-                  placeholder="Ex.: Alongamento em gel"
-                  required
-                />
-              </div>
+            {error ? (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                Não foi possível carregar os serviços.
+              </p>
+            ) : null}
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Descrição</Label>
+            {!error && services?.length === 0 ? (
+              <Card>
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  Nenhum serviço cadastrado ainda.
+                </CardContent>
+              </Card>
+            ) : null}
 
-                <Textarea
-                  id="description"
-                  name="description"
-                  placeholder="Descreva o serviço"
-                />
-              </div>
+            <div className="space-y-4">
+              {services?.map((service) => (
+                <Card key={service.id}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <CardTitle>{service.name}</CardTitle>
 
-              <div className="grid gap-5 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label htmlFor="durationMinutes">
-                    Duração em minutos
-                  </Label>
+                        <CardDescription className="mt-1">
+                          {service.description || "Sem descrição."}
+                        </CardDescription>
+                      </div>
 
-                  <Input
-                    id="durationMinutes"
-                    name="durationMinutes"
-                    type="number"
-                    min="1"
-                    defaultValue="120"
-                    required
-                  />
-                </div>
+                      <span
+                        className={
+                          service.active
+                            ? "rounded-full bg-green-600/10 px-3 py-1 text-xs font-medium text-green-700"
+                            : "rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
+                        }
+                      >
+                        {service.active ? "Ativo" : "Inativo"}
+                      </span>
+                    </div>
+                  </CardHeader>
 
-                <div className="space-y-2">
-                  <Label htmlFor="price">Preço em reais</Label>
+                  <CardContent>
+                    <div className="grid gap-3 text-sm sm:grid-cols-3">
+                      <div>
+                        <p className="text-muted-foreground">Preço</p>
+                        <p className="font-medium">
+                          {formatCurrency(service.price_cents)}
+                        </p>
+                      </div>
 
-                  <Input
-                    id="price"
-                    name="price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="180,00"
-                    required
-                  />
-                </div>
+                      <div>
+                        <p className="text-muted-foreground">Duração</p>
+                        <p className="font-medium">
+                          {service.duration_minutes} minutos
+                        </p>
+                      </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="depositPercentage">
-                    Sinal em %
-                  </Label>
+                      <div>
+                        <p className="text-muted-foreground">Sinal</p>
+                        <p className="font-medium">
+                          {service.deposit_percentage}%
+                        </p>
+                      </div>
+                    </div>
 
-                  <Input
-                    id="depositPercentage"
-                    name="depositPercentage"
-                    type="number"
-                    min="0"
-                    max="100"
-                    defaultValue="30"
-                    required
-                  />
-                </div>
-              </div>
+                    <form
+                      action={alternarStatusServico}
+                      className="mt-5"
+                    >
+                      <input
+                        type="hidden"
+                        name="serviceId"
+                        value={service.id}
+                      />
 
-              {state.error ? (
-                <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {state.error}
-                </p>
-              ) : null}
+                      <input
+                        type="hidden"
+                        name="active"
+                        value={String(service.active)}
+                      />
 
-              {state.success ? (
-                <p className="rounded-md border border-green-600/30 bg-green-600/10 px-3 py-2 text-sm text-green-700">
-                  {state.success}
-                </p>
-              ) : null}
-
-              <Button type="submit" disabled={pending}>
-                {pending ? "Cadastrando..." : "Cadastrar serviço"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        className="w-full"
+                      >
+                        {service.active
+                          ? "Desativar serviço"
+                          : "Ativar serviço"}
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        </div>
       </div>
     </main>
   );
