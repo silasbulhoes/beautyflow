@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 import { alternarStatusServico } from "./actions";
 import { ServiceForm } from "./service-form";
 
-import { Button } from "@/components/ui/button";
+import {
+  Button,
+  buttonVariants,
+} from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -63,7 +66,9 @@ export default async function ServicosPage() {
             ← Voltar ao painel
           </Link>
 
-          <h1 className="mt-4 text-3xl font-semibold">Serviços</h1>
+          <h1 className="mt-4 text-3xl font-semibold">
+            Serviços
+          </h1>
 
           <p className="mt-2 text-muted-foreground">
             Cadastre e gerencie os serviços disponíveis para agendamento.
@@ -126,53 +131,71 @@ export default async function ServicosPage() {
                   <CardContent>
                     <div className="grid gap-3 text-sm sm:grid-cols-3">
                       <div>
-                        <p className="text-muted-foreground">Preço</p>
+                        <p className="text-muted-foreground">
+                          Preço
+                        </p>
+
                         <p className="font-medium">
                           {formatCurrency(service.price_cents)}
                         </p>
                       </div>
 
                       <div>
-                        <p className="text-muted-foreground">Duração</p>
+                        <p className="text-muted-foreground">
+                          Duração
+                        </p>
+
                         <p className="font-medium">
                           {service.duration_minutes} minutos
                         </p>
                       </div>
 
                       <div>
-                        <p className="text-muted-foreground">Sinal</p>
+                        <p className="text-muted-foreground">
+                          Sinal
+                        </p>
+
                         <p className="font-medium">
                           {service.deposit_percentage}%
                         </p>
                       </div>
                     </div>
 
-                    <form
-                      action={alternarStatusServico}
-                      className="mt-5"
-                    >
-                      <input
-                        type="hidden"
-                        name="serviceId"
-                        value={service.id}
-                      />
-
-                      <input
-                        type="hidden"
-                        name="active"
-                        value={String(service.active)}
-                      />
-
-                      <Button
-                        type="submit"
-                        variant="outline"
-                        className="w-full"
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                      <Link
+                        href={`/painel/servicos/${service.id}/editar`}
+                        className={buttonVariants({
+                          variant: "outline",
+                          className: "w-full",
+                        })}
                       >
-                        {service.active
-                          ? "Desativar serviço"
-                          : "Ativar serviço"}
-                      </Button>
-                    </form>
+                        Editar
+                      </Link>
+
+                      <form action={alternarStatusServico}>
+                        <input
+                          type="hidden"
+                          name="serviceId"
+                          value={service.id}
+                        />
+
+                        <input
+                          type="hidden"
+                          name="active"
+                          value={String(service.active)}
+                        />
+
+                        <Button
+                          type="submit"
+                          variant="outline"
+                          className="w-full"
+                        >
+                          {service.active
+                            ? "Desativar serviço"
+                            : "Ativar serviço"}
+                        </Button>
+                      </form>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
