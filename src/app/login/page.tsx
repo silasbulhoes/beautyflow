@@ -1,4 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useActionState } from "react";
+
+import { entrar, type LoginState } from "./actions";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +16,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const initialState: LoginState = {};
+
 export default function LoginPage() {
+  const [state, formAction, pending] = useActionState(entrar, initialState);
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/40 px-6 py-12">
       <Card className="w-full max-w-md">
@@ -28,29 +37,22 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent>
-          <form className="space-y-5">
+          <form action={formAction} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
+
               <Input
                 id="email"
                 name="email"
                 type="email"
                 placeholder="voce@exemplo.com"
                 autoComplete="email"
+                required
               />
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Senha</Label>
-
-                <button
-                  type="button"
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  Esqueci minha senha
-                </button>
-              </div>
+              <Label htmlFor="password">Senha</Label>
 
               <Input
                 id="password"
@@ -58,11 +60,18 @@ export default function LoginPage() {
                 type="password"
                 placeholder="Digite sua senha"
                 autoComplete="current-password"
+                required
               />
             </div>
 
-            <Button type="submit" className="w-full">
-              Entrar
+            {state.error ? (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {state.error}
+              </p>
+            ) : null}
+
+            <Button type="submit" className="w-full" disabled={pending}>
+              {pending ? "Entrando..." : "Entrar"}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
