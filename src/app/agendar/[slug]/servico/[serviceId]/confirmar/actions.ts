@@ -19,6 +19,14 @@ function parseLocalDate(value: string) {
   return new Date(year, month - 1, day, 12);
 }
 
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function isValidCpfCnpjLength(value: string) {
+  return value.length === 11 || value.length === 14;
+}
+
 export async function confirmarAgendamento(
   slug: string,
   serviceId: string,
@@ -28,14 +36,26 @@ export async function confirmarAgendamento(
   formData: FormData,
 ): Promise<ConfirmationState> {
   const name = String(formData.get("name") ?? "").trim();
+
+  const cpfCnpj = onlyDigits(
+    String(formData.get("cpfCnpj") ?? ""),
+  );
+
   const phone = String(formData.get("phone") ?? "").trim();
+
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
 
-  if (!name || !phone) {
+  if (!name || !cpfCnpj || !phone) {
     return {
-      error: "Preencha o nome e o WhatsApp.",
+      error: "Preencha o nome, o CPF e o WhatsApp.",
+    };
+  }
+
+  if (!isValidCpfCnpjLength(cpfCnpj)) {
+    return {
+      error: "Informe um CPF ou CNPJ válido.",
     };
   }
 
@@ -127,6 +147,7 @@ export async function confirmarAgendamento(
       id: clientId,
       company_id: company.id,
       name,
+      cpf_cnpj: cpfCnpj,
       phone,
       email: email || null,
     });
@@ -148,7 +169,7 @@ export async function confirmarAgendamento(
     service.price_cents - depositAmount;
 
   const expiresAt = new Date(
-    Date.now() + 15 * 60 * 1000,
+    Date.now() + 30 * 60 * 1000,
   ).toISOString();
 
   const { error: appointmentError } = await supabase

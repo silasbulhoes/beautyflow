@@ -2,6 +2,7 @@ import {
     CalendarDays,
     CheckCircle2,
     Clock,
+    CreditCard,
     QrCode,
   } from "lucide-react";
   import { notFound } from "next/navigation";
@@ -15,10 +16,15 @@ import {
   } from "@/components/ui/card";
   import { createAdminClient } from "@/lib/supabase/admin";
   
+  import { PaymentButton } from "./payment-button";
+  
   type PagamentoPageProps = {
     params: Promise<{
       slug: string;
       appointmentId: string;
+    }>;
+    searchParams: Promise<{
+      resultado?: string;
     }>;
   };
   
@@ -46,8 +52,10 @@ import {
   
   export default async function PagamentoPage({
     params,
+    searchParams,
   }: PagamentoPageProps) {
     const { slug, appointmentId } = await params;
+    const { resultado } = await searchParams;
   
     const supabase = createAdminClient();
   
@@ -74,6 +82,8 @@ import {
         deposit_amount_cents,
         remaining_amount_cents,
         expires_at,
+        payment_status,
+        asaas_checkout_url,
         clients (
           name,
           phone,
@@ -100,16 +110,18 @@ import {
       ? appointment.services[0]
       : appointment.services;
   
-      const isConfirmed = appointment.status === "confirmed";
-
-      const expirationTime = appointment.expires_at
-        ? new Date(appointment.expires_at).getTime()
-        : null;
-      
-      const isExpired =
-        appointment.status === "expired" ||
-        (expirationTime !== null &&
-          expirationTime < new Date().getTime());
+    const isConfirmed =
+      appointment.status === "confirmed" ||
+      appointment.payment_status === "confirmed" ||
+      appointment.payment_status === "received";
+  
+    const isExpired =
+      appointment.status === "expired" ||
+      appointment.payment_status === "expired";
+  
+    const paymentWasCancelled = resultado === "cancelado";
+    const paymentReturnedAsExpired = resultado === "expirado";
+    const paymentReturnedAsSuccess = resultado === "sucesso";
   
     return (
       <main className="min-h-screen bg-muted/30">
@@ -139,6 +151,38 @@ import {
               Confira o resumo e pague o sinal para confirmar o horário.
             </p>
           </div>
+  
+          {paymentWasCancelled ? (
+            <div className="mt-6 rounded-xl border border-amber-600/30 bg-amber-600/10 p-4">
+              <p className="font-medium">Pagamento cancelado</p>
+  
+              <p className="mt-1 text-sm text-muted-foreground">
+                Nenhum pagamento foi confirmado. Você pode tentar
+                novamente.
+              </p>
+            </div>
+          ) : null}
+  
+          {paymentReturnedAsExpired ? (
+            <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/10 p-4">
+              <p className="font-medium">Checkout expirado</p>
+  
+              <p className="mt-1 text-sm text-muted-foreground">
+                O prazo para concluir esse pagamento terminou.
+              </p>
+            </div>
+          ) : null}
+  
+          {paymentReturnedAsSuccess && !isConfirmed ? (
+            <div className="mt-6 rounded-xl border border-blue-600/30 bg-blue-600/10 p-4">
+              <p className="font-medium">Pagamento enviado</p>
+  
+              <p className="mt-1 text-sm text-muted-foreground">
+                Estamos aguardando a confirmação do Asaas. Essa página
+                será atualizada quando o webhook estiver configurado.
+              </p>
+            </div>
+          ) : null}
   
           <div className="mt-8 grid gap-6 md:grid-cols-[1fr_1.1fr]">
             <Card>
@@ -173,6 +217,12 @@ import {
                   <p className="text-sm text-muted-foreground">
                     {client?.phone}
                   </p>
+  
+                  {client?.email ? (
+                    <p className="text-sm text-muted-foreground">
+                      {client.email}
+                    </p>
+                  ) : null}
                 </div>
   
                 <div>
@@ -182,6 +232,7 @@ import {
   
                   <p className="mt-1 flex items-start gap-2 font-medium capitalize">
                     <CalendarDays className="mt-0.5 size-4 shrink-0" />
+  
                     {formatDate(appointment.appointment_date)}
                   </p>
                 </div>
@@ -193,6 +244,7 @@ import {
   
                   <p className="mt-1 flex items-center gap-2 font-medium">
                     <Clock className="size-4" />
+  
                     {formatTime(appointment.start_time)}
                     {" às "}
                     {formatTime(appointment.end_time)}
@@ -246,15 +298,15 @@ import {
                     ? "Pagamento confirmado"
                     : isExpired
                       ? "Reserva expirada"
-                      : "Pague com Pix"}
+                      : "Pague o sinal"}
                 </CardTitle>
   
                 <CardDescription>
                   {isConfirmed
                     ? "Seu horário está confirmado."
                     : isExpired
-                      ? "O tempo para concluir este pagamento terminou."
-                      : "O QR Code do Mercado Pago aparecerá aqui."}
+                      ? "O tempo para concluir o pagamento terminou."
+                      : "Escolha Pix ou cartão na página segura do Asaas."}
                 </CardDescription>
               </CardHeader>
   
@@ -268,7 +320,7 @@ import {
                     </p>
   
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Guarde a data e o horário do atendimento.
+                      O pagamento do sinal foi confirmado.
                     </p>
                   </div>
                 ) : isExpired ? (
@@ -278,26 +330,26 @@ import {
                     </p>
   
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Volte ao início e escolha o horário novamente.
+                      Volte ao início e escolha outro horário.
                     </p>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed p-8 text-center">
-                    <QrCode className="mx-auto size-16 text-muted-foreground" />
+                  <div className="rounded-xl border p-6">
+                    <div className="flex justify-center gap-5">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <QrCode className="size-5" />
+                        Pix
+                      </div>
   
-                    <p className="mt-5 font-semibold">
-                      Integração Pix pendente
-                    </p>
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <CreditCard className="size-5" />
+                        Cartão
+                      </div>
+                    </div>
   
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      O agendamento foi criado. No próximo passo,
-                      conectaremos o Mercado Pago para gerar o QR Code e
-                      confirmar automaticamente o pagamento.
-                    </p>
-  
-                    <div className="mt-6 rounded-lg bg-muted p-4">
+                    <div className="mt-6 rounded-lg bg-muted p-4 text-center">
                       <p className="text-sm text-muted-foreground">
-                        Valor do Pix
+                        Valor do sinal
                       </p>
   
                       <p className="mt-1 text-2xl font-semibold">
@@ -305,6 +357,18 @@ import {
                           appointment.deposit_amount_cents,
                         )}
                       </p>
+                    </div>
+  
+                    <p className="mt-5 text-center text-sm leading-6 text-muted-foreground">
+                      Você será direcionada para uma página protegida do
+                      Asaas para concluir o pagamento.
+                    </p>
+  
+                    <div className="mt-6">
+                      <PaymentButton
+                        appointmentId={appointment.id}
+                        slug={slug}
+                      />
                     </div>
                   </div>
                 )}

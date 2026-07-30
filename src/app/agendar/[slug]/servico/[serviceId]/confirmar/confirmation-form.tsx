@@ -54,6 +54,24 @@ export function ConfirmationForm({
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor="cpfCnpj">CPF</Label>
+
+        <Input
+          id="cpfCnpj"
+          name="cpfCnpj"
+          inputMode="numeric"
+          placeholder="000.000.000-00"
+          autoComplete="off"
+          maxLength={14}
+          required
+        />
+
+        <p className="text-xs text-muted-foreground">
+          Necessário para gerar o pagamento no Asaas.
+        </p>
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="phone">WhatsApp</Label>
 
         <Input
