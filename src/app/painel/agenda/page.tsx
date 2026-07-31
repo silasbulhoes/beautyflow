@@ -187,6 +187,7 @@ import {
     searchParams,
   }: AgendaPageProps) {
     const parameters = await searchParams;
+  
     const currentDateInformation =
       getCurrentDateInformation();
   
@@ -698,6 +699,15 @@ import {
                             </div>
                           </div>
   
+                          <Link
+                            href={`/painel/agenda/${appointment.id}`}
+                            className={buttonVariants({
+                              className: "mt-4 w-full",
+                            })}
+                          >
+                            Ver detalhes
+                          </Link>
+  
                           {client?.phone ? (
                             <a
                               href={`https://wa.me/${client.phone.replace(
@@ -709,7 +719,7 @@ import {
                               className={buttonVariants({
                                 variant: "outline",
                                 className:
-                                  "mt-4 w-full gap-2",
+                                  "mt-3 w-full gap-2",
                               })}
                             >
                               <MessageCircle className="size-4" />
