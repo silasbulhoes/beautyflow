@@ -88,6 +88,29 @@ export default async function PainelPage() {
 
           <Card>
             <CardHeader>
+              <CardTitle>Clientes</CardTitle>
+
+              <CardDescription>
+                Consulte contatos e histórico de
+                atendimentos.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent>
+              <Link
+                href="/painel/clientes"
+                className={buttonVariants({
+                  variant: "outline",
+                  className: "w-full",
+                })}
+              >
+                Ver clientes
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle>Serviços</CardTitle>
 
               <CardDescription>
@@ -128,26 +151,6 @@ export default async function PainelPage() {
               >
                 Gerenciar horários
               </Link>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Clientes</CardTitle>
-
-              <CardDescription>
-                Consulte os dados e o histórico das clientes.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent>
-              <Button
-                className="w-full"
-                variant="outline"
-                disabled
-              >
-                Em breve
-              </Button>
             </CardContent>
           </Card>
         </section>
