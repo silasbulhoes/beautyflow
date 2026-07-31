@@ -3,7 +3,10 @@ import { redirect } from "next/navigation";
 
 import { sair } from "./actions";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Button,
+  buttonVariants,
+} from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -33,7 +36,10 @@ export default async function PainelPage() {
     <main className="min-h-screen bg-muted/30">
       <header className="border-b bg-background">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <Link href="/painel" className="text-xl font-semibold">
+          <Link
+            href="/painel"
+            className="text-xl font-semibold"
+          >
             BeautyFlow
           </Link>
 
@@ -47,14 +53,39 @@ export default async function PainelPage() {
 
       <div className="mx-auto max-w-6xl px-6 py-10">
         <div>
-          <h1 className="text-3xl font-semibold">Olá, {name}</h1>
+          <h1 className="text-3xl font-semibold">
+            Olá, {name}
+          </h1>
 
           <p className="mt-2 text-muted-foreground">
-            Gerencie seus serviços, horários e clientes.
+            Gerencie sua agenda, serviços, horários e
+            clientes.
           </p>
         </div>
 
-        <section className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Agenda</CardTitle>
+
+              <CardDescription>
+                Veja o calendário, clientes e horários
+                marcados.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent>
+              <Link
+                href="/painel/agenda"
+                className={buttonVariants({
+                  className: "w-full",
+                })}
+              >
+                Abrir agenda
+              </Link>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Serviços</CardTitle>
@@ -68,6 +99,7 @@ export default async function PainelPage() {
               <Link
                 href="/painel/servicos"
                 className={buttonVariants({
+                  variant: "outline",
                   className: "w-full",
                 })}
               >
@@ -81,7 +113,8 @@ export default async function PainelPage() {
               <CardTitle>Disponibilidade</CardTitle>
 
               <CardDescription>
-                Configure seus dias e horários de atendimento.
+                Configure seus dias e horários de
+                atendimento.
               </CardDescription>
             </CardHeader>
 
@@ -108,7 +141,11 @@ export default async function PainelPage() {
             </CardHeader>
 
             <CardContent>
-              <Button className="w-full" variant="outline" disabled>
+              <Button
+                className="w-full"
+                variant="outline"
+                disabled
+              >
                 Em breve
               </Button>
             </CardContent>
