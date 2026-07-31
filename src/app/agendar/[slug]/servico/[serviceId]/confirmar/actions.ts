@@ -3,7 +3,7 @@
 import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
 
-import { createPublicClient } from "@/lib/supabase/public";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type ConfirmationState = {
   error?: string;
@@ -85,7 +85,12 @@ export async function confirmarAgendamento(
     };
   }
 
-  const supabase = createPublicClient();
+  /*
+   * Esta ação roda somente no servidor.
+   * O cliente administrativo é usado para verificar e criar
+   * a reserva sem depender de permissões públicas do navegador.
+   */
+  const supabase = createAdminClient();
 
   const { data: company } = await supabase
     .from("companies")
@@ -135,6 +140,42 @@ export async function confirmarAgendamento(
   if (selectedDate.getDay() !== schedule.weekday) {
     return {
       error: "A data não corresponde ao horário selecionado.",
+    };
+  }
+
+  /*
+   * Libera uma reserva pendente cujo tempo para pagamento
+   * já terminou.
+   */
+  await supabase
+    .from("appointments")
+    .update({
+      status: "expired",
+      payment_status: "expired",
+    })
+    .eq("company_id", company.id)
+    .eq("appointment_date", appointmentDate)
+    .eq("business_hour_id", schedule.id)
+    .eq("status", "pending_payment")
+    .lt("expires_at", new Date().toISOString());
+
+  /*
+   * Verificação amigável antes da inserção.
+   * O índice único do banco continua sendo a proteção definitiva.
+   */
+  const { data: occupiedAppointment } = await supabase
+    .from("appointments")
+    .select("id")
+    .eq("company_id", company.id)
+    .eq("appointment_date", appointmentDate)
+    .eq("business_hour_id", schedule.id)
+    .in("status", ["pending_payment", "confirmed"])
+    .maybeSingle();
+
+  if (occupiedAppointment) {
+    return {
+      error:
+        "Este horário acabou de ser reservado. Volte e escolha outro horário.",
     };
   }
 
@@ -191,6 +232,22 @@ export async function confirmarAgendamento(
     });
 
   if (appointmentError) {
+    /*
+     * Remove o cliente criado para não deixar um registro órfão
+     * quando outra pessoa reservou o horário simultaneamente.
+     */
+    await supabase
+      .from("clients")
+      .delete()
+      .eq("id", clientId);
+
+    if (appointmentError.code === "23505") {
+      return {
+        error:
+          "Este horário acabou de ser reservado. Volte e escolha outro horário.",
+      };
+    }
+
     console.error(
       "Erro ao criar agendamento:",
       appointmentError,

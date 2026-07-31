@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createPublicClient } from "@/lib/supabase/public";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type EscolherHorarioPageProps = {
   params: Promise<{
@@ -21,6 +21,13 @@ type EscolherHorarioPageProps = {
   searchParams: Promise<{
     data?: string;
   }>;
+};
+
+type Schedule = {
+  id: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
 };
 
 const weekdayNames: Record<number, string> = {
@@ -84,6 +91,10 @@ function formatSelectedDate(value: string) {
   }).format(new Date(year, month - 1, day, 12));
 }
 
+async function getCurrentTime() {
+  return new Date().toISOString();
+}
+
 export default async function EscolherHorarioPage({
   params,
   searchParams,
@@ -97,7 +108,12 @@ export default async function EscolherHorarioPage({
       ? selectedDateParam
       : null;
 
-  const supabase = createPublicClient();
+  /*
+   * Esta página roda no servidor.
+   * O cliente administrativo permite consultar os agendamentos
+   * sem liberar dados particulares pela política pública do banco.
+   */
+  const supabase = createAdminClient();
 
   const { data: company } = await supabase
     .from("companies")
@@ -124,40 +140,104 @@ export default async function EscolherHorarioPage({
     notFound();
   }
 
-  let schedules:
-    | Array<{
-        id: string;
-        weekday: number;
-        start_time: string;
-        end_time: string;
-      }>
-    | null = null;
-
+  let schedules: Schedule[] = [];
   let scheduleError = false;
   let selectedWeekday: number | null = null;
 
   if (selectedDate) {
-    const [year, month, day] = selectedDate.split("-").map(Number);
-    const parsedDate = new Date(year, month - 1, day, 12);
+    const [year, month, day] = selectedDate
+      .split("-")
+      .map(Number);
+
+    const parsedDate = new Date(
+      year,
+      month - 1,
+      day,
+      12,
+    );
 
     selectedWeekday = parsedDate.getDay();
 
-    const { data, error } = await supabase
-      .from("business_hours")
-      .select("id, weekday, start_time, end_time")
-      .eq("company_id", company.id)
-      .eq("weekday", selectedWeekday)
-      .eq("active", true)
-      .order("start_time", {
-        ascending: true,
-      });
+    const currentTime = await getCurrentTime();
 
-    schedules = data;
-    scheduleError = Boolean(error);
+    /*
+     * Libera horários cujo prazo para pagamento já terminou.
+     */
+    const { error: expirationError } = await supabase
+      .from("appointments")
+      .update({
+        status: "expired",
+        payment_status: "expired",
+      })
+      .eq("company_id", company.id)
+      .eq("appointment_date", selectedDate)
+      .eq("status", "pending_payment")
+      .lt("expires_at", currentTime);
+
+    if (expirationError) {
+      console.error(
+        "Erro ao expirar reservas antigas:",
+        expirationError,
+      );
+    }
+
+    const { data: configuredSchedules, error } =
+      await supabase
+        .from("business_hours")
+        .select("id, weekday, start_time, end_time")
+        .eq("company_id", company.id)
+        .eq("weekday", selectedWeekday)
+        .eq("active", true)
+        .order("start_time", {
+          ascending: true,
+        });
+
+    if (error) {
+      scheduleError = true;
+    } else {
+      const { data: occupiedAppointments, error: occupiedError } =
+        await supabase
+          .from("appointments")
+          .select("business_hour_id")
+          .eq("company_id", company.id)
+          .eq("appointment_date", selectedDate)
+          .in("status", [
+            "pending_payment",
+            "confirmed",
+          ]);
+
+      if (occupiedError) {
+        console.error(
+          "Erro ao consultar horários ocupados:",
+          occupiedError,
+        );
+
+        scheduleError = true;
+      } else {
+        const occupiedScheduleIds = new Set(
+          occupiedAppointments
+            ?.map(
+              (appointment) =>
+                appointment.business_hour_id,
+            )
+            .filter(
+              (scheduleId): scheduleId is string =>
+                typeof scheduleId === "string",
+            ) ?? [],
+        );
+
+        schedules =
+          configuredSchedules?.filter(
+            (schedule) =>
+              !occupiedScheduleIds.has(schedule.id),
+          ) ?? [];
+      }
+    }
   }
 
   const depositAmount = Math.round(
-    service.price_cents * (service.deposit_percentage / 100),
+    service.price_cents *
+      (service.deposit_percentage / 100),
   );
 
   return (
@@ -192,8 +272,8 @@ export default async function EscolherHorarioPage({
           </h2>
 
           <p className="mt-2 text-muted-foreground">
-            Primeiro escolha o dia. Depois serão mostrados apenas os horários
-            disponíveis para esse dia da semana.
+            Primeiro escolha o dia. Depois serão mostrados apenas os
+            horários disponíveis.
           </p>
         </div>
 
@@ -202,28 +282,40 @@ export default async function EscolherHorarioPage({
             <CardTitle>{service.name}</CardTitle>
 
             <CardDescription>
-              {service.description || "Serviço selecionado."}
+              {service.description ||
+                "Serviço selecionado."}
             </CardDescription>
           </CardHeader>
 
           <CardContent>
             <div className="grid gap-4 text-sm sm:grid-cols-3">
               <div>
-                <p className="text-muted-foreground">Preço</p>
+                <p className="text-muted-foreground">
+                  Preço
+                </p>
+
                 <p className="font-medium">
                   {formatCurrency(service.price_cents)}
                 </p>
               </div>
 
               <div>
-                <p className="text-muted-foreground">Duração</p>
+                <p className="text-muted-foreground">
+                  Duração
+                </p>
+
                 <p className="font-medium">
-                  {formatDuration(service.duration_minutes)}
+                  {formatDuration(
+                    service.duration_minutes,
+                  )}
                 </p>
               </div>
 
               <div>
-                <p className="text-muted-foreground">Sinal</p>
+                <p className="text-muted-foreground">
+                  Sinal
+                </p>
+
                 <p className="font-medium">
                   {formatCurrency(depositAmount)}
                 </p>
@@ -245,9 +337,14 @@ export default async function EscolherHorarioPage({
           </CardHeader>
 
           <CardContent>
-            <form method="get" className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <form
+              method="get"
+              className="flex flex-col gap-4 sm:flex-row sm:items-end"
+            >
               <div className="w-full space-y-2">
-                <Label htmlFor="data">Escolha a data</Label>
+                <Label htmlFor="data">
+                  Escolha a data
+                </Label>
 
                 <Input
                   id="data"
@@ -273,12 +370,14 @@ export default async function EscolherHorarioPage({
           <section className="mt-8">
             <div>
               <h3 className="text-xl font-semibold">
-                Horários para {formatSelectedDate(selectedDate)}
+                Horários para{" "}
+                {formatSelectedDate(selectedDate)}
               </h3>
 
               {selectedWeekday !== null ? (
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Dia configurado: {weekdayNames[selectedWeekday]}
+                  Dia configurado:{" "}
+                  {weekdayNames[selectedWeekday]}
                 </p>
               ) : null}
             </div>
@@ -289,22 +388,26 @@ export default async function EscolherHorarioPage({
               </p>
             ) : null}
 
-            {!scheduleError && schedules?.length === 0 ? (
+            {!scheduleError &&
+            schedules.length === 0 ? (
               <Card className="mt-5">
                 <CardContent className="py-10 text-center">
                   <p className="font-medium">
-                    Não há horários cadastrados para esse dia.
+                    Nenhum horário disponível para essa
+                    data.
                   </p>
 
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Escolha outra data para continuar.
+                    Os horários podem estar ocupados ou não
+                    haver atendimento nesse dia. Escolha
+                    outra data.
                   </p>
                 </CardContent>
               </Card>
             ) : null}
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {schedules?.map((schedule) => (
+              {schedules.map((schedule) => (
                 <Link
                   key={schedule.id}
                   href={`/agendar/${company.slug}/servico/${service.id}/confirmar?data=${selectedDate}&horario=${schedule.id}`}
