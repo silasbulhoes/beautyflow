@@ -3,6 +3,7 @@
 import {
   CalendarDays,
   Clock3,
+  FileLock2,
   LayoutDashboard,
   Scissors,
   ShieldCheck,
@@ -52,11 +53,18 @@ const regularNavigationItems = [
   },
 ];
 
-const adminNavigationItem = {
-  href: "/painel/admin/subcontas",
-  label: "Admin",
-  icon: ShieldCheck,
-};
+const adminNavigationItems = [
+  {
+    href: "/painel/admin/subcontas",
+    label: "Admin",
+    icon: ShieldCheck,
+  },
+  {
+    href: "/painel/admin/privacidade",
+    label: "LGPD",
+    icon: FileLock2,
+  },
+];
 
 function isCurrentRoute(
   pathname: string,
@@ -81,7 +89,7 @@ export function PainelNavigation({
   const navigationItems = isAdmin
     ? [
         ...regularNavigationItems,
-        adminNavigationItem,
+        ...adminNavigationItems,
       ]
     : regularNavigationItems;
 
@@ -115,7 +123,6 @@ export function PainelNavigation({
               })}
             >
               <Icon className="size-4" />
-
               {item.label}
             </Link>
           );
@@ -152,7 +159,6 @@ export function PainelNavigation({
               }`}
             >
               <Icon className="size-4" />
-
               {item.label}
             </Link>
           );
