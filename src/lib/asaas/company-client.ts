@@ -3,12 +3,12 @@ import "server-only";
 import { decryptSecret } from "@/lib/security/encryption";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-type CompanyAsaasCredentials = {
+export type CompanyAsaasCredentials = {
   apiKey: string;
   apiUrl: string;
-  accountId: string | null;
-  walletId: string | null;
-  usingSubaccount: boolean;
+  accountId: string;
+  walletId: string;
+  usingSubaccount: true;
 };
 
 export async function getCompanyAsaasCredentials(
@@ -25,22 +25,27 @@ export async function getCompanyAsaasCredentials(
 
   const adminSupabase = createAdminClient();
 
-  const { data: company, error } = await adminSupabase
-    .from("companies")
-    .select(`
-      id,
-      asaas_account_id,
-      asaas_wallet_id,
-      asaas_api_key_encrypted,
-      asaas_account_status
-    `)
-    .eq("id", companyId)
-    .maybeSingle();
+  const { data: company, error } =
+    await adminSupabase
+      .from("companies")
+      .select(`
+        id,
+        asaas_account_id,
+        asaas_wallet_id,
+        asaas_api_key_encrypted,
+        asaas_account_status
+      `)
+      .eq("id", companyId)
+      .maybeSingle();
 
   if (error) {
     console.error(
       "Erro ao consultar integração Asaas da empresa:",
-      error,
+      {
+        code: error.code,
+        message: error.message,
+        companyId,
+      },
     );
 
     throw new Error(
@@ -52,49 +57,72 @@ export async function getCompanyAsaasCredentials(
     throw new Error("Empresa não encontrada.");
   }
 
-  const hasSubaccount =
-    Boolean(company.asaas_account_id) &&
-    Boolean(company.asaas_wallet_id) &&
-    Boolean(company.asaas_api_key_encrypted);
+  const accountId = String(
+    company.asaas_account_id ?? "",
+  ).trim();
 
-  if (hasSubaccount) {
-    try {
-      return {
-        apiKey: decryptSecret(
-          company.asaas_api_key_encrypted,
-        ),
-        apiUrl,
-        accountId: company.asaas_account_id,
-        walletId: company.asaas_wallet_id,
-        usingSubaccount: true,
-      };
-    } catch (error) {
-      console.error(
-        "Erro ao descriptografar chave da subconta:",
-        error instanceof Error
-          ? error.message
-          : "Erro desconhecido",
-      );
+  const walletId = String(
+    company.asaas_wallet_id ?? "",
+  ).trim();
 
-      throw new Error(
-        "Não foi possível acessar a conta financeira da profissional.",
-      );
-    }
-  }
+  const encryptedApiKey = String(
+    company.asaas_api_key_encrypted ?? "",
+  ).trim();
 
-  const centralApiKey = process.env.ASAAS_API_KEY;
+  const hasCompleteSubaccount =
+    Boolean(accountId) &&
+    Boolean(walletId) &&
+    Boolean(encryptedApiKey);
 
-  if (!centralApiKey) {
+  if (!hasCompleteSubaccount) {
+    console.error(
+      "Empresa sem integração financeira completa:",
+      {
+        companyId,
+        hasAccountId: Boolean(accountId),
+        hasWalletId: Boolean(walletId),
+        hasEncryptedApiKey:
+          Boolean(encryptedApiKey),
+      },
+    );
+
     throw new Error(
-      "ASAAS_API_KEY não foi configurada.",
+      "A profissional ainda não configurou sua conta financeira.",
     );
   }
 
-  return {
-    apiKey: centralApiKey,
-    apiUrl,
-    accountId: null,
-    walletId: null,
-    usingSubaccount: false,
-  };
+  try {
+    const apiKey = decryptSecret(
+      encryptedApiKey,
+    );
+
+    if (!apiKey.trim()) {
+      throw new Error(
+        "A chave descriptografada está vazia.",
+      );
+    }
+
+    return {
+      apiKey,
+      apiUrl,
+      accountId,
+      walletId,
+      usingSubaccount: true,
+    };
+  } catch (error) {
+    console.error(
+      "Erro ao descriptografar chave da subconta:",
+      {
+        companyId,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro desconhecido",
+      },
+    );
+
+    throw new Error(
+      "Não foi possível acessar a conta financeira da profissional.",
+    );
+  }
 }
