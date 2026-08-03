@@ -29,6 +29,12 @@ function readFormValue(
   return String(formData.get(field) ?? "").trim();
 }
 
+function wait(milliseconds: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
 export async function simularPagamentoSandbox(
   _previousState: SandboxPaymentState,
   formData: FormData,
@@ -113,7 +119,8 @@ export async function simularPagamentoSandbox(
 
   if (
     appointment.status === "confirmed" ||
-    appointment.payment_status === "received"
+    appointment.payment_status === "received" ||
+    appointment.payment_status === "confirmed"
   ) {
     return {
       success:
@@ -199,11 +206,13 @@ export async function simularPagamentoSandbox(
       ? paymentsResult.data
       : [];
 
+    const pixPayment = payments.find(
+      (item) =>
+        item.billingType?.toUpperCase() === "PIX",
+    );
+
     const payment =
-      payments.find(
-        (item) =>
-          item.billingType?.toUpperCase() === "PIX",
-      ) ??
+      pixPayment ??
       payments.find((item) => Boolean(item.id));
 
     paymentId = payment?.id ?? null;
@@ -246,29 +255,74 @@ export async function simularPagamentoSandbox(
     };
   }
 
-  const paidAt = new Date().toISOString();
+  /*
+   * Salvamos somente o ID da cobrança.
+   *
+   * Não alteramos status, payment_status nem paid_at.
+   * Esses campos devem ser atualizados pelo webhook.
+   */
+  const { error: paymentIdUpdateError } =
+    await supabase
+      .from("appointments")
+      .update({
+        asaas_payment_id: paymentId,
+      })
+      .eq("id", appointment.id)
+      .eq("company_id", company.id);
 
-  const { error: updateError } = await supabase
-    .from("appointments")
-    .update({
-      status: "confirmed",
-      payment_status: "received",
-      asaas_payment_id: paymentId,
-      paid_at: paidAt,
-    })
-    .eq("id", appointment.id)
-    .eq("company_id", company.id);
-
-  if (updateError) {
+  if (paymentIdUpdateError) {
     console.error(
-      "Pagamento simulado, mas houve erro ao atualizar o agendamento:",
-      updateError,
+      "Pagamento simulado, mas não foi possível salvar o paymentId:",
+      paymentIdUpdateError,
     );
+  }
 
-    return {
-      error:
-        "O pagamento foi simulado, mas o agendamento não foi atualizado.",
-    };
+  console.info(
+    "Pagamento simulado no Asaas Sandbox. Aguardando webhook:",
+    {
+      appointmentId: appointment.id,
+      paymentId,
+      usingSubaccount:
+        credentials.usingSubaccount,
+    },
+  );
+
+  /*
+   * Aguarda alguns segundos para o webhook chegar à Vercel
+   * e atualizar o agendamento no Supabase.
+   */
+  let webhookConfirmed = false;
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await wait(1000);
+
+    const {
+      data: updatedAppointment,
+      error: refreshError,
+    } = await supabase
+      .from("appointments")
+      .select("status, payment_status")
+      .eq("id", appointment.id)
+      .eq("company_id", company.id)
+      .maybeSingle();
+
+    if (refreshError) {
+      console.error(
+        "Erro ao verificar confirmação do webhook:",
+        refreshError,
+      );
+
+      break;
+    }
+
+    if (
+      updatedAppointment?.status === "confirmed" ||
+      updatedAppointment?.payment_status === "received" ||
+      updatedAppointment?.payment_status === "confirmed"
+    ) {
+      webhookConfirmed = true;
+      break;
+    }
   }
 
   revalidatePath(
@@ -281,18 +335,15 @@ export async function simularPagamentoSandbox(
     `/painel/agenda/${appointment.id}`,
   );
 
-  console.info(
-    "Pagamento confirmado manualmente no Sandbox:",
-    {
-      appointmentId: appointment.id,
-      paymentId,
-      usingSubaccount:
-        credentials.usingSubaccount,
-    },
-  );
+  if (webhookConfirmed) {
+    return {
+      success:
+        "Pagamento simulado e confirmado automaticamente pelo webhook.",
+    };
+  }
 
   return {
     success:
-      "Pagamento simulado com sucesso. O agendamento foi confirmado.",
+      "Pagamento simulado no Asaas. A confirmação automática ainda está sendo processada. Atualize a página em alguns segundos.",
   };
 }
