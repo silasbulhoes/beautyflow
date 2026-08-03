@@ -8,6 +8,7 @@ import {
   import { redirect } from "next/navigation";
   
   import { FinancialAccountForm } from "./financial-account-form";
+  import { PixKeyButton } from "./pix-key-button";
   
   import {
     Card,
@@ -22,6 +23,7 @@ import {
   type FinancialPageProps = {
     searchParams: Promise<{
       sucesso?: string;
+      pix?: string;
     }>;
   };
   
@@ -116,6 +118,35 @@ import {
             </div>
           ) : null}
   
+          {parameters.sucesso === "1" &&
+          parameters.pix === "1" ? (
+            <div className="mt-4 rounded-xl border border-green-600/30 bg-green-600/10 p-4">
+              <p className="flex items-center gap-2 font-medium text-green-700">
+                <CheckCircle2 className="size-5" />
+                Chave Pix configurada
+              </p>
+  
+              <p className="mt-1 text-sm text-muted-foreground">
+                A subconta já pode receber pagamentos via Pix.
+              </p>
+            </div>
+          ) : null}
+  
+          {parameters.sucesso === "1" &&
+          parameters.pix === "0" ? (
+            <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+              <p className="flex items-center gap-2 font-medium text-amber-800">
+                <Clock3 className="size-5" />
+                Conta criada, mas o Pix precisa ser configurado
+              </p>
+  
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use o botão de configuração abaixo para criar
+                uma chave Pix aleatória.
+              </p>
+            </div>
+          ) : null}
+  
           {accountIsConnected ? (
             <div className="mt-8 space-y-6">
               <Card>
@@ -140,9 +171,8 @@ import {
                       </p>
   
                       <p className="mt-1 text-sm text-muted-foreground">
-                        A próxima etapa será concluir o
-                        onboarding e verificar a situação
-                        cadastral da conta.
+                        A situação cadastral será atualizada nas
+                        próximas etapas da integração.
                       </p>
                     </div>
                   </div>
@@ -171,6 +201,22 @@ import {
                       {company.asaas_account_status ??
                         "pending"}
                     </p>
+                  </div>
+  
+                  <div className="rounded-lg border p-4">
+                    <p className="font-medium">
+                      Chave Pix da conta
+                    </p>
+  
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Crie uma chave Pix aleatória para permitir
+                      que esta profissional receba sinais via
+                      Pix.
+                    </p>
+  
+                    <div className="mt-4">
+                      <PixKeyButton />
+                    </div>
                   </div>
                 </CardContent>
               </Card>

@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 
+import { getCompanyAsaasCredentials } from "@/lib/asaas/company-client";
+import { asaasRequest } from "@/lib/asaas/request";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type CreateCheckoutState = {
@@ -25,10 +27,25 @@ function getBaseUrl() {
   );
 }
 
+function getCheckoutFallbackUrl(
+  apiUrl: string,
+  checkoutId: string,
+) {
+  const isSandbox = apiUrl.includes("api-sandbox");
+
+  const checkoutDomain = isSandbox
+    ? "https://sandbox.asaas.com"
+    : "https://www.asaas.com";
+
+  return `${checkoutDomain}/checkoutSession/show/${checkoutId}`;
+}
+
 export async function createAsaasCheckout(
   _previousState: CreateCheckoutState,
   formData: FormData,
 ): Promise<CreateCheckoutState> {
+  void _previousState;
+
   const appointmentId = String(
     formData.get("appointmentId") ?? "",
   ).trim();
@@ -43,25 +60,26 @@ export async function createAsaasCheckout(
     };
   }
 
-  const asaasApiKey = process.env.ASAAS_API_KEY;
-
-  const asaasApiUrl =
-    process.env.ASAAS_API_URL ??
-    "https://api-sandbox.asaas.com/v3";
-
-  if (!asaasApiKey) {
-    return {
-      error: "A chave do Asaas não foi configurada.",
-    };
-  }
-
   const supabase = createAdminClient();
 
-  const { data: company } = await supabase
-    .from("companies")
-    .select("id, slug")
-    .eq("slug", slug)
-    .maybeSingle();
+  const { data: company, error: companyError } =
+    await supabase
+      .from("companies")
+      .select("id, slug")
+      .eq("slug", slug)
+      .eq("active", true)
+      .maybeSingle();
+
+  if (companyError) {
+    console.error(
+      "Erro ao consultar empresa do agendamento:",
+      companyError,
+    );
+
+    return {
+      error: "Não foi possível consultar a empresa.",
+    };
+  }
 
   if (!company) {
     return {
@@ -69,23 +87,36 @@ export async function createAsaasCheckout(
     };
   }
 
-  const { data: appointment } = await supabase
-    .from("appointments")
-    .select(`
-      id,
-      company_id,
-      status,
-      deposit_amount_cents,
-      asaas_checkout_id,
-      asaas_checkout_url,
-      services (
-        name,
-        description
-      )
-    `)
-    .eq("id", appointmentId)
-    .eq("company_id", company.id)
-    .maybeSingle();
+  const { data: appointment, error: appointmentError } =
+    await supabase
+      .from("appointments")
+      .select(`
+        id,
+        company_id,
+        status,
+        payment_status,
+        deposit_amount_cents,
+        asaas_checkout_id,
+        asaas_checkout_url,
+        services (
+          name,
+          description
+        )
+      `)
+      .eq("id", appointmentId)
+      .eq("company_id", company.id)
+      .maybeSingle();
+
+  if (appointmentError) {
+    console.error(
+      "Erro ao consultar agendamento:",
+      appointmentError,
+    );
+
+    return {
+      error: "Não foi possível consultar o agendamento.",
+    };
+  }
 
   if (!appointment) {
     return {
@@ -93,9 +124,22 @@ export async function createAsaasCheckout(
     };
   }
 
-  if (appointment.status === "confirmed") {
+  if (
+    appointment.status === "confirmed" ||
+    appointment.payment_status === "received"
+  ) {
     return {
       error: "Este agendamento já foi confirmado.",
+    };
+  }
+
+  if (
+    appointment.status === "canceled" ||
+    appointment.status === "expired"
+  ) {
+    return {
+      error:
+        "Este agendamento não está mais disponível para pagamento.",
     };
   }
 
@@ -106,6 +150,27 @@ export async function createAsaasCheckout(
     redirect(appointment.asaas_checkout_url);
   }
 
+  let asaasCredentials: Awaited<
+    ReturnType<typeof getCompanyAsaasCredentials>
+  >;
+
+  try {
+    asaasCredentials =
+      await getCompanyAsaasCredentials(company.id);
+  } catch (error) {
+    console.error(
+      "Erro ao carregar credenciais financeiras:",
+      error instanceof Error
+        ? error.message
+        : "Erro desconhecido",
+    );
+
+    return {
+      error:
+        "Não foi possível acessar a conta financeira da profissional.",
+    };
+  }
+
   const service = Array.isArray(appointment.services)
     ? appointment.services[0]
     : appointment.services;
@@ -113,7 +178,16 @@ export async function createAsaasCheckout(
   const depositValue =
     appointment.deposit_amount_cents / 100;
 
-  const baseUrl = getBaseUrl();
+  if (
+    !Number.isFinite(depositValue) ||
+    depositValue <= 0
+  ) {
+    return {
+      error: "O valor do sinal é inválido.",
+    };
+  }
+
+  const baseUrl = getBaseUrl().replace(/\/$/, "");
 
   const payload = {
     billingTypes: ["PIX", "CREDIT_CARD"],
@@ -123,66 +197,88 @@ export async function createAsaasCheckout(
 
     callback: {
       successUrl:
-        `${baseUrl}/agendar/${slug}/pagamento/${appointment.id}?resultado=sucesso`,
+        `${baseUrl}/agendar/${slug}/pagamento/` +
+        `${appointment.id}?resultado=sucesso`,
 
       cancelUrl:
-        `${baseUrl}/agendar/${slug}/pagamento/${appointment.id}?resultado=cancelado`,
+        `${baseUrl}/agendar/${slug}/pagamento/` +
+        `${appointment.id}?resultado=cancelado`,
 
       expiredUrl:
-        `${baseUrl}/agendar/${slug}/pagamento/${appointment.id}?resultado=expirado`,
+        `${baseUrl}/agendar/${slug}/pagamento/` +
+        `${appointment.id}?resultado=expirado`,
     },
 
     items: [
       {
         externalReference: appointment.id,
-
         name: `Sinal - ${service?.name ?? "Serviço"}`,
-
         description:
           service?.description ??
           "Pagamento do sinal do agendamento",
-
         quantity: 1,
         value: depositValue,
       },
     ],
   };
 
-  const response = await fetch(
-    `${asaasApiUrl}/checkouts`,
-    {
-      method: "POST",
+  let result: AsaasCheckoutResponse;
 
-      headers: {
-        accept: "application/json",
-        "Content-Type": "application/json",
-        access_token: asaasApiKey,
-      },
-
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    },
-  );
-
-  const result =
-    (await response.json()) as AsaasCheckoutResponse;
-
-  if (!response.ok || !result.id) {
+  try {
+    result =
+      await asaasRequest<AsaasCheckoutResponse>({
+        apiUrl: asaasCredentials.apiUrl,
+        apiKey: asaasCredentials.apiKey,
+        path: "/checkouts",
+        method: "POST",
+        body: payload,
+      });
+  } catch (error) {
     console.error(
       "Erro ao criar checkout Asaas:",
-      result,
+      {
+        companyId: company.id,
+        appointmentId: appointment.id,
+        usingSubaccount:
+          asaasCredentials.usingSubaccount,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro desconhecido",
+      },
     );
 
     return {
       error:
-        result.errors?.[0]?.description ??
-        "O Asaas não conseguiu criar o checkout.",
+        error instanceof Error
+          ? error.message
+          : "O Asaas não conseguiu criar o checkout.",
+    };
+  }
+
+  if (!result.id) {
+    console.error(
+      "Checkout criado sem identificador:",
+      {
+        companyId: company.id,
+        appointmentId: appointment.id,
+        usingSubaccount:
+          asaasCredentials.usingSubaccount,
+      },
+    );
+
+    return {
+      error:
+        "O Asaas retornou um checkout sem identificação.",
     };
   }
 
   const checkoutUrl =
     result.link ??
-    `https://sandbox.asaas.com/checkoutSession/show/${result.id}`;
+    getCheckoutFallbackUrl(
+      asaasCredentials.apiUrl,
+      result.id,
+    );
 
   const { error: updateError } = await supabase
     .from("appointments")
@@ -206,6 +302,15 @@ export async function createAsaasCheckout(
         "O checkout foi criado, mas não foi possível salvá-lo.",
     };
   }
+
+  console.info("Checkout Asaas criado:", {
+    appointmentId: appointment.id,
+    companyId: company.id,
+    usingSubaccount:
+      asaasCredentials.usingSubaccount,
+    asaasAccountId:
+      asaasCredentials.accountId,
+  });
 
   redirect(checkoutUrl);
 }
