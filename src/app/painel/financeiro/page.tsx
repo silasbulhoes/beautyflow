@@ -9,6 +9,7 @@ import {
   
   import { FinancialAccountForm } from "./financial-account-form";
   import { PixKeyButton } from "./pix-key-button";
+  import { WebhookButton } from "./webhook-button";
   
   import {
     Card,
@@ -216,6 +217,22 @@ import {
   
                     <div className="mt-4">
                       <PixKeyButton />
+                    </div>
+                  </div>
+  
+                  <div className="rounded-lg border p-4">
+                    <p className="font-medium">
+                      Confirmação automática
+                    </p>
+  
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Configure o webhook da subconta para que
+                      os pagamentos sejam confirmados
+                      automaticamente no BeautyFlow.
+                    </p>
+  
+                    <div className="mt-4">
+                      <WebhookButton />
                     </div>
                   </div>
                 </CardContent>
