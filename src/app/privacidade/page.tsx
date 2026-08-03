@@ -396,19 +396,23 @@ import {
               </CardHeader>
   
               <CardContent>
-                {privacyContactEmail ? (
-                  <a
-                    href={`mailto:${privacyContactEmail}`}
-                    className="font-medium text-primary hover:underline"
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Link
+                    href="/privacidade/solicitacao"
+                    className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/90"
                   >
-                    {privacyContactEmail}
-                  </a>
-                ) : (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800">
-                    O canal de privacidade ainda está em
-                    configuração.
-                  </div>
-                )}
+                    Enviar solicitação de dados
+                  </Link>
+  
+                  {privacyContactEmail ? (
+                    <a
+                      href={`mailto:${privacyContactEmail}`}
+                      className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-5 text-sm font-medium shadow-xs transition-colors hover:bg-muted"
+                    >
+                      Enviar e-mail
+                    </a>
+                  ) : null}
+                </div>
   
                 <p className="mt-4 text-sm leading-7 text-muted-foreground">
                   A solicitação poderá exigir confirmação
