@@ -3,6 +3,7 @@ import {
     Clock3,
     LayoutDashboard,
     Scissors,
+    ShieldCheck,
     UsersRound,
   } from "lucide-react";
   import Link from "next/link";
@@ -21,7 +22,7 @@ import {
     children: ReactNode;
   };
   
-  const navigationItems = [
+  const regularNavigationItems = [
     {
       href: "/painel",
       label: "Início",
@@ -49,6 +50,21 @@ import {
     },
   ];
   
+  const adminNavigationItem = {
+    href: "/painel/admin/subcontas",
+    label: "Admin",
+    icon: ShieldCheck,
+  };
+  
+  function getAdminEmails() {
+    return String(
+      process.env.BEAUTYFLOW_ADMIN_EMAILS ?? "",
+    )
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  
   export default async function PainelLayout({
     children,
   }: PainelLayoutProps) {
@@ -66,6 +82,20 @@ import {
       typeof user.user_metadata?.name === "string"
         ? user.user_metadata.name
         : "Profissional";
+  
+    const userEmail = user.email?.trim().toLowerCase();
+  
+    const isAdmin = Boolean(
+      userEmail &&
+        getAdminEmails().includes(userEmail),
+    );
+  
+    const navigationItems = isAdmin
+      ? [
+          ...regularNavigationItems,
+          adminNavigationItem,
+        ]
+      : regularNavigationItems;
   
     return (
       <div className="min-h-screen bg-muted/30">
@@ -108,12 +138,18 @@ import {
                 </p>
   
                 <p className="text-xs text-muted-foreground">
-                  Área profissional
+                  {isAdmin
+                    ? "Administrador"
+                    : "Área profissional"}
                 </p>
               </div>
   
               <form action={sair}>
-                <Button type="submit" variant="outline" size="sm">
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                >
                   Sair
                 </Button>
               </form>
