@@ -3,6 +3,7 @@
 import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
 
+import { PRIVACY_NOTICE_VERSION } from "@/lib/privacy";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type ConfirmationState = {
@@ -14,7 +15,9 @@ function isValidDateString(value: string) {
 }
 
 function parseLocalDate(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
+  const [year, month, day] = value
+    .split("-")
+    .map(Number);
 
   return new Date(year, month - 1, day, 12);
 }
@@ -35,21 +38,35 @@ export async function confirmarAgendamento(
   _previousState: ConfirmationState,
   formData: FormData,
 ): Promise<ConfirmationState> {
-  const name = String(formData.get("name") ?? "").trim();
+  const name = String(
+    formData.get("name") ?? "",
+  ).trim();
 
   const cpfCnpj = onlyDigits(
     String(formData.get("cpfCnpj") ?? ""),
   );
 
-  const phone = String(formData.get("phone") ?? "").trim();
+  const phone = String(
+    formData.get("phone") ?? "",
+  ).trim();
 
-  const email = String(formData.get("email") ?? "")
+  const email = String(
+    formData.get("email") ?? "",
+  )
     .trim()
     .toLowerCase();
 
+  const privacyAcknowledged =
+    formData.get("privacyAcknowledged") === "on";
+
+  const privacyNoticeVersion = String(
+    formData.get("privacyNoticeVersion") ?? "",
+  ).trim();
+
   if (!name || !cpfCnpj || !phone) {
     return {
-      error: "Preencha o nome, o CPF e o WhatsApp.",
+      error:
+        "Preencha o nome, o CPF e o WhatsApp.",
     };
   }
 
@@ -59,13 +76,25 @@ export async function confirmarAgendamento(
     };
   }
 
+  if (
+    !privacyAcknowledged ||
+    privacyNoticeVersion !==
+      PRIVACY_NOTICE_VERSION
+  ) {
+    return {
+      error:
+        "Leia e confirme a ciência do Aviso de Privacidade para continuar.",
+    };
+  }
+
   if (!isValidDateString(appointmentDate)) {
     return {
       error: "Data inválida.",
     };
   }
 
-  const selectedDate = parseLocalDate(appointmentDate);
+  const selectedDate =
+    parseLocalDate(appointmentDate);
 
   if (Number.isNaN(selectedDate.getTime())) {
     return {
@@ -76,7 +105,9 @@ export async function confirmarAgendamento(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const selectedDateAtMidnight = new Date(selectedDate);
+  const selectedDateAtMidnight =
+    new Date(selectedDate);
+
   selectedDateAtMidnight.setHours(0, 0, 0, 0);
 
   if (selectedDateAtMidnight < today) {
@@ -85,11 +116,6 @@ export async function confirmarAgendamento(
     };
   }
 
-  /*
-   * Esta ação roda somente no servidor.
-   * O cliente administrativo é usado para verificar e criar
-   * a reserva sem depender de permissões públicas do navegador.
-   */
   const supabase = createAdminClient();
 
   const { data: company } = await supabase
@@ -137,16 +163,16 @@ export async function confirmarAgendamento(
     };
   }
 
-  if (selectedDate.getDay() !== schedule.weekday) {
+  if (
+    selectedDate.getDay() !==
+    schedule.weekday
+  ) {
     return {
-      error: "A data não corresponde ao horário selecionado.",
+      error:
+        "A data não corresponde ao horário selecionado.",
     };
   }
 
-  /*
-   * Libera uma reserva pendente cujo tempo para pagamento
-   * já terminou.
-   */
   await supabase
     .from("appointments")
     .update({
@@ -157,20 +183,29 @@ export async function confirmarAgendamento(
     .eq("appointment_date", appointmentDate)
     .eq("business_hour_id", schedule.id)
     .eq("status", "pending_payment")
-    .lt("expires_at", new Date().toISOString());
+    .lt(
+      "expires_at",
+      new Date().toISOString(),
+    );
 
-  /*
-   * Verificação amigável antes da inserção.
-   * O índice único do banco continua sendo a proteção definitiva.
-   */
-  const { data: occupiedAppointment } = await supabase
-    .from("appointments")
-    .select("id")
-    .eq("company_id", company.id)
-    .eq("appointment_date", appointmentDate)
-    .eq("business_hour_id", schedule.id)
-    .in("status", ["pending_payment", "confirmed"])
-    .maybeSingle();
+  const { data: occupiedAppointment } =
+    await supabase
+      .from("appointments")
+      .select("id")
+      .eq("company_id", company.id)
+      .eq(
+        "appointment_date",
+        appointmentDate,
+      )
+      .eq(
+        "business_hour_id",
+        schedule.id,
+      )
+      .in("status", [
+        "pending_payment",
+        "confirmed",
+      ])
+      .maybeSingle();
 
   if (occupiedAppointment) {
     return {
@@ -182,9 +217,8 @@ export async function confirmarAgendamento(
   const clientId = randomUUID();
   const appointmentId = randomUUID();
 
-  const { error: clientError } = await supabase
-    .from("clients")
-    .insert({
+  const { error: clientError } =
+    await supabase.from("clients").insert({
       id: clientId,
       company_id: company.id,
       name,
@@ -194,10 +228,14 @@ export async function confirmarAgendamento(
     });
 
   if (clientError) {
-    console.error("Erro ao criar cliente:", clientError);
+    console.error(
+      "Erro ao criar cliente:",
+      clientError,
+    );
 
     return {
-      error: "Não foi possível salvar os dados da cliente.",
+      error:
+        "Não foi possível salvar os dados da cliente.",
     };
   }
 
@@ -213,35 +251,43 @@ export async function confirmarAgendamento(
     Date.now() + 30 * 60 * 1000,
   ).toISOString();
 
-  const { error: appointmentError } = await supabase
-    .from("appointments")
-    .insert({
-      id: appointmentId,
-      company_id: company.id,
-      client_id: clientId,
-      service_id: service.id,
-      business_hour_id: schedule.id,
-      appointment_date: appointmentDate,
-      start_time: schedule.start_time,
-      end_time: schedule.end_time,
-      status: "pending_payment",
-      total_amount_cents: service.price_cents,
-      deposit_amount_cents: depositAmount,
-      remaining_amount_cents: remainingAmount,
-      expires_at: expiresAt,
-    });
+  const privacyAcknowledgedAt =
+    new Date().toISOString();
+
+  const { error: appointmentError } =
+    await supabase
+      .from("appointments")
+      .insert({
+        id: appointmentId,
+        company_id: company.id,
+        client_id: clientId,
+        service_id: service.id,
+        business_hour_id: schedule.id,
+        appointment_date: appointmentDate,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+        status: "pending_payment",
+        total_amount_cents:
+          service.price_cents,
+        deposit_amount_cents: depositAmount,
+        remaining_amount_cents:
+          remainingAmount,
+        expires_at: expiresAt,
+        privacy_notice_version:
+          PRIVACY_NOTICE_VERSION,
+        privacy_notice_acknowledged_at:
+          privacyAcknowledgedAt,
+      });
 
   if (appointmentError) {
-    /*
-     * Remove o cliente criado para não deixar um registro órfão
-     * quando outra pessoa reservou o horário simultaneamente.
-     */
     await supabase
       .from("clients")
       .delete()
       .eq("id", clientId);
 
-    if (appointmentError.code === "23505") {
+    if (
+      appointmentError.code === "23505"
+    ) {
       return {
         error:
           "Este horário acabou de ser reservado. Volte e escolha outro horário.",
@@ -254,7 +300,8 @@ export async function confirmarAgendamento(
     );
 
     return {
-      error: "Não foi possível criar o agendamento.",
+      error:
+        "Não foi possível criar o agendamento.",
     };
   }
 

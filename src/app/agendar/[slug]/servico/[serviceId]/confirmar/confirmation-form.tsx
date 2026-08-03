@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 
 import {
@@ -10,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PRIVACY_NOTICE_VERSION } from "@/lib/privacy";
 
 type ConfirmationFormProps = {
   slug: string;
@@ -34,10 +36,8 @@ export function ConfirmationForm({
     appointmentDate,
   );
 
-  const [state, formAction, pending] = useActionState(
-    action,
-    initialState,
-  );
+  const [state, formAction, pending] =
+    useActionState(action, initialState);
 
   return (
     <form action={formAction} className="space-y-5">
@@ -85,7 +85,9 @@ export function ConfirmationForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="email">E-mail — opcional</Label>
+        <Label htmlFor="email">
+          E-mail — opcional
+        </Label>
 
         <Input
           id="email"
@@ -94,6 +96,40 @@ export function ConfirmationForm({
           placeholder="voce@exemplo.com"
           autoComplete="email"
         />
+      </div>
+
+      <input
+        type="hidden"
+        name="privacyNoticeVersion"
+        value={PRIVACY_NOTICE_VERSION}
+      />
+
+      <div className="rounded-lg border bg-muted/40 p-4">
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            id="privacyAcknowledged"
+            name="privacyAcknowledged"
+            type="checkbox"
+            required
+            className="mt-1 size-4 shrink-0 accent-current"
+          />
+
+          <span className="text-sm leading-6 text-muted-foreground">
+            Li o{" "}
+            <Link
+              href="/privacidade"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-primary underline underline-offset-4"
+            >
+              Aviso de Privacidade
+            </Link>{" "}
+            e estou ciente de que meus dados serão
+            utilizados para realizar o agendamento,
+            processar o pagamento e permitir as
+            comunicações relacionadas ao atendimento.
+          </span>
+        </label>
       </div>
 
       {state.error ? (
