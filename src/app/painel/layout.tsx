@@ -5,6 +5,7 @@ import {
     Scissors,
     ShieldCheck,
     UsersRound,
+    WalletCards,
   } from "lucide-react";
   import Link from "next/link";
   import { redirect } from "next/navigation";
@@ -47,6 +48,11 @@ import {
       href: "/painel/disponibilidade",
       label: "Horários",
       icon: Clock3,
+    },
+    {
+      href: "/painel/financeiro",
+      label: "Financeiro",
+      icon: WalletCards,
     },
   ];
   
