@@ -182,9 +182,9 @@ export async function createAsaasCheckout(
     !Number.isFinite(depositValue) ||
     depositValue <= 0
   ) {
-    return {
-      error: "O valor do sinal é inválido.",
-    };
+    redirect(
+      `/agendar/${slug}/confirmado/${appointmentId}`,
+    );
   }
 
   const baseUrl = getBaseUrl().replace(/\/$/, "");

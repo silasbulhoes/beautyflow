@@ -5,7 +5,7 @@ import {
   CreditCard,
   QrCode,
 } from "lucide-react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import {
   Card,
@@ -105,6 +105,12 @@ export default async function PagamentoPage({
 
   if (!appointment) {
     notFound();
+  }
+
+  if (appointment.deposit_amount_cents <= 0) {
+    redirect(
+      `/agendar/${slug}/confirmado/${appointmentId}`,
+    );
   }
 
   const client = Array.isArray(appointment.clients)

@@ -350,13 +350,13 @@ export async function confirmarAgendamento(
     };
   }
 
-  /*
-   * A próxima página mostrará:
-   *
-   * - checkout do Asaas quando houver sinal;
-   * - confirmação imediata quando o sinal for zero.
-   */
+  if (requiresPayment) {
+    redirect(
+      `/agendar/${slug}/pagamento/${appointmentId}`,
+    );
+  }
+
   redirect(
-    `/agendar/${slug}/pagamento/${appointmentId}`,
+    `/agendar/${slug}/confirmado/${appointmentId}`,
   );
 }
