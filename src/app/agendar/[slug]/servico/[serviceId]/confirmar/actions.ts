@@ -78,8 +78,7 @@ export async function confirmarAgendamento(
 
   if (
     !privacyAcknowledged ||
-    privacyNoticeVersion !==
-      PRIVACY_NOTICE_VERSION
+    privacyNoticeVersion !== PRIVACY_NOTICE_VERSION
   ) {
     return {
       error:
@@ -164,8 +163,7 @@ export async function confirmarAgendamento(
   }
 
   if (
-    selectedDate.getDay() !==
-    schedule.weekday
+    selectedDate.getDay() !== schedule.weekday
   ) {
     return {
       error:
@@ -173,6 +171,10 @@ export async function confirmarAgendamento(
     };
   }
 
+  /*
+   * Libera horários cujo prazo para pagamento
+   * já terminou.
+   */
   await supabase
     .from("appointments")
     .update({
@@ -188,6 +190,10 @@ export async function confirmarAgendamento(
       new Date().toISOString(),
     );
 
+  /*
+   * Verifica se outra cliente já reservou
+   * ou confirmou esse horário.
+   */
   const { data: occupiedAppointment } =
     await supabase
       .from("appointments")
@@ -239,17 +245,47 @@ export async function confirmarAgendamento(
     };
   }
 
+  const priceInCents = Number(
+    service.price_cents,
+  );
+
+  const depositPercentage = Math.min(
+    100,
+    Math.max(
+      0,
+      Number(service.deposit_percentage ?? 0),
+    ),
+  );
+
   const depositAmount = Math.round(
-    service.price_cents *
-      (service.deposit_percentage / 100),
+    priceInCents * (depositPercentage / 100),
   );
 
   const remainingAmount =
-    service.price_cents - depositAmount;
+    priceInCents - depositAmount;
 
-  const expiresAt = new Date(
-    Date.now() + 30 * 60 * 1000,
-  ).toISOString();
+  /*
+   * Quando o sinal for maior que zero,
+   * o horário fica reservado por 30 minutos.
+   *
+   * Quando o sinal for zero,
+   * o agendamento é confirmado imediatamente.
+   */
+  const requiresPayment = depositAmount > 0;
+
+  const appointmentStatus = requiresPayment
+    ? "pending_payment"
+    : "confirmed";
+
+  const paymentStatus = requiresPayment
+    ? "pending"
+    : "not_required";
+
+  const expiresAt = requiresPayment
+    ? new Date(
+        Date.now() + 30 * 60 * 1000,
+      ).toISOString()
+    : null;
 
   const privacyAcknowledgedAt =
     new Date().toISOString();
@@ -266,20 +302,29 @@ export async function confirmarAgendamento(
         appointment_date: appointmentDate,
         start_time: schedule.start_time,
         end_time: schedule.end_time,
-        status: "pending_payment",
-        total_amount_cents:
-          service.price_cents,
+
+        status: appointmentStatus,
+        payment_status: paymentStatus,
+
+        total_amount_cents: priceInCents,
         deposit_amount_cents: depositAmount,
         remaining_amount_cents:
           remainingAmount,
+
         expires_at: expiresAt,
+
         privacy_notice_version:
           PRIVACY_NOTICE_VERSION,
+
         privacy_notice_acknowledged_at:
           privacyAcknowledgedAt,
       });
 
   if (appointmentError) {
+    /*
+     * Remove o cliente criado caso o
+     * agendamento não possa ser salvo.
+     */
     await supabase
       .from("clients")
       .delete()
@@ -305,6 +350,12 @@ export async function confirmarAgendamento(
     };
   }
 
+  /*
+   * A próxima página mostrará:
+   *
+   * - checkout do Asaas quando houver sinal;
+   * - confirmação imediata quando o sinal for zero.
+   */
   redirect(
     `/agendar/${slug}/pagamento/${appointmentId}`,
   );
