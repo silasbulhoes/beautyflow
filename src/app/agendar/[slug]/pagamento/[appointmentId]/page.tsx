@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { expirePendingAppointmentIfDue } from "@/lib/appointments/expire-pending-appointment";
 
 import { PaymentButton } from "./payment-button";
 import { SandboxPaymentButton } from "./sandbox-payment-button";
@@ -113,6 +114,13 @@ export default async function PagamentoPage({
     );
   }
 
+  const wasExpired =
+    await expirePendingAppointmentIfDue(supabase, {
+      id: appointment.id,
+      status: appointment.status,
+      expires_at: appointment.expires_at,
+    });
+
   const client = Array.isArray(appointment.clients)
     ? appointment.clients[0]
     : appointment.clients;
@@ -127,6 +135,7 @@ export default async function PagamentoPage({
     appointment.payment_status === "received";
 
   const isExpired =
+    wasExpired ||
     appointment.status === "expired" ||
     appointment.payment_status === "expired";
 

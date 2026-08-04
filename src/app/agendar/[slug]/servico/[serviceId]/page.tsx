@@ -12,6 +12,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  expireExpiredPendingAppointments,
+  isAppointmentOccupyingSlot,
+} from "@/lib/appointments/expire-pending-appointment";
 
 type EscolherHorarioPageProps = {
   params: Promise<{
@@ -160,26 +164,10 @@ export default async function EscolherHorarioPage({
 
     const currentTime = await getCurrentTime();
 
-    /*
-     * Libera horários cujo prazo para pagamento já terminou.
-     */
-    const { error: expirationError } = await supabase
-      .from("appointments")
-      .update({
-        status: "expired",
-        payment_status: "expired",
-      })
-      .eq("company_id", company.id)
-      .eq("appointment_date", selectedDate)
-      .eq("status", "pending_payment")
-      .lt("expires_at", currentTime);
-
-    if (expirationError) {
-      console.error(
-        "Erro ao expirar reservas antigas:",
-        expirationError,
-      );
-    }
+    await expireExpiredPendingAppointments(supabase, {
+      companyId: company.id,
+      appointmentDate: selectedDate,
+    });
 
     const { data: configuredSchedules, error } =
       await supabase
@@ -198,7 +186,7 @@ export default async function EscolherHorarioPage({
       const { data: occupiedAppointments, error: occupiedError } =
         await supabase
           .from("appointments")
-          .select("business_hour_id")
+          .select("business_hour_id, status, expires_at")
           .eq("company_id", company.id)
           .eq("appointment_date", selectedDate)
           .in("status", [
@@ -216,9 +204,15 @@ export default async function EscolherHorarioPage({
       } else {
         const occupiedScheduleIds = new Set(
           occupiedAppointments
-            ?.map(
-              (appointment) =>
-                appointment.business_hour_id,
+            ?.filter((occupiedAppointment) =>
+              isAppointmentOccupyingSlot(
+                occupiedAppointment,
+                currentTime,
+              ),
+            )
+            .map(
+              (occupiedAppointment) =>
+                occupiedAppointment.business_hour_id,
             )
             .filter(
               (scheduleId): scheduleId is string =>

@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 
 import { getCompanyAsaasCredentials } from "@/lib/asaas/company-client";
 import { asaasRequest } from "@/lib/asaas/request";
+import {
+  expirePendingAppointmentIfDue,
+  isPendingPaymentExpired,
+} from "@/lib/appointments/expire-pending-appointment";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type CreateCheckoutState = {
@@ -96,6 +100,7 @@ export async function createAsaasCheckout(
         status,
         payment_status,
         deposit_amount_cents,
+        expires_at,
         asaas_checkout_id,
         asaas_checkout_url,
         services (
@@ -135,11 +140,33 @@ export async function createAsaasCheckout(
 
   if (
     appointment.status === "canceled" ||
-    appointment.status === "expired"
+    appointment.status === "expired" ||
+    appointment.payment_status === "expired"
   ) {
     return {
       error:
         "Este agendamento não está mais disponível para pagamento.",
+    };
+  }
+
+  const wasExpired =
+    await expirePendingAppointmentIfDue(supabase, {
+      id: appointment.id,
+      status: appointment.status,
+      expires_at: appointment.expires_at,
+    });
+
+  if (
+    wasExpired ||
+    isPendingPaymentExpired({
+      id: appointment.id,
+      status: appointment.status,
+      expires_at: appointment.expires_at,
+    })
+  ) {
+    return {
+      error:
+        "O prazo para pagamento desta reserva expirou. Volte e escolha outro horário.",
     };
   }
 

@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
 
 import { PRIVACY_NOTICE_VERSION } from "@/lib/privacy";
+import { expireExpiredPendingAppointments } from "@/lib/appointments/expire-pending-appointment";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type ConfirmationState = {
@@ -171,24 +172,11 @@ export async function confirmarAgendamento(
     };
   }
 
-  /*
-   * Libera horários cujo prazo para pagamento
-   * já terminou.
-   */
-  await supabase
-    .from("appointments")
-    .update({
-      status: "expired",
-      payment_status: "expired",
-    })
-    .eq("company_id", company.id)
-    .eq("appointment_date", appointmentDate)
-    .eq("business_hour_id", schedule.id)
-    .eq("status", "pending_payment")
-    .lt(
-      "expires_at",
-      new Date().toISOString(),
-    );
+  await expireExpiredPendingAppointments(supabase, {
+    companyId: company.id,
+    appointmentDate,
+    businessHourId: schedule.id,
+  });
 
   /*
    * Verifica se outra cliente já reservou
