@@ -42,13 +42,45 @@ export async function asaasRequest<T>({
       response: responseData,
     });
 
+    const errors = Array.isArray(responseData?.errors)
+      ? responseData.errors
+      : [];
+    const descriptions = errors
+      .map((item: unknown) => {
+        if (!item || typeof item !== "object") {
+          return null;
+        }
+
+        const errorItem = item as {
+          code?: unknown;
+          description?: unknown;
+        };
+        const description =
+          typeof errorItem.description === "string"
+            ? errorItem.description.trim()
+            : "";
+        const code =
+          typeof errorItem.code === "string"
+            ? errorItem.code.trim()
+            : "";
+
+        if (!description) {
+          return null;
+        }
+
+        return code
+          ? `${description} (${code})`
+          : description;
+      })
+      .filter((item: string | null): item is string =>
+        Boolean(item),
+      );
+
     const message =
-      Array.isArray(responseData?.errors) &&
-      responseData.errors[0]?.description
-        ? responseData.errors[0].description
-        : responseData?.message ??
-          responseData?.description ??
-          "O Asaas recusou a operação.";
+      descriptions.join(" ") ||
+      responseData?.message ||
+      responseData?.description ||
+      `O Asaas recusou a operação (HTTP ${response.status}).`;
 
     throw new Error(message);
   }

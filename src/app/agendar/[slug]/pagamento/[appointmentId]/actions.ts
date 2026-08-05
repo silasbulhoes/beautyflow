@@ -139,7 +139,7 @@ export async function createAsaasCheckout(
   }
 
   if (
-    appointment.status === "canceled" ||
+    appointment.status === "cancelled" ||
     appointment.status === "expired" ||
     appointment.payment_status === "expired"
   ) {

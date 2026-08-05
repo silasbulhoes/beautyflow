@@ -300,7 +300,7 @@ import {
       return "Aguardando pagamento";
     }
   
-    if (appointment.status === "canceled") {
+    if (appointment.status === "cancelled") {
       return "Cancelado";
     }
   
@@ -326,7 +326,7 @@ import {
       return "bg-amber-500/10 text-amber-800";
     }
   
-    if (appointment.status === "canceled") {
+    if (appointment.status === "cancelled") {
       return "bg-red-600/10 text-red-700";
     }
   
