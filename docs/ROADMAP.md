@@ -140,3 +140,18 @@ Funcionalidades futuras:
 - estoque;
 - inteligência artificial.
 
+---
+
+## Finalização para produção — 2026-08
+
+- [x] Corrigir cancelamento para `cancelled` e tornar estorno idempotente.
+- [x] Adicionar recuperação e alteração de senha.
+- [x] Criar página pública de planos sem cobrança automática.
+- [x] Preparar migration incremental de planos, billing, auditoria e reconciliação.
+- [x] Criar reconciliação protegida para pagamentos pendentes.
+- [ ] Revisar e aplicar migrations no Supabase após aprovação.
+- [ ] Confirmar/reconectar a conta Asaas correta após aprovação.
+- [ ] Ativar e testar billing da plataforma em Sandbox.
+- [ ] Executar primeiro pagamento e estorno real após aprovação.
+- [ ] Habilitar enforcement somente após período de observação.
+

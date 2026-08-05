@@ -1,174 +1,71 @@
 # Arquitetura do BeautyFlow
 
-## 1. Objetivo
+## Visão geral
 
-Este documento descreve a arquitetura técnica do BeautyFlow.
+O BeautyFlow é uma aplicação SaaS multiempresa construída com Next.js 16, React 19, TypeScript, Supabase e Asaas. A aplicação reúne as páginas públicas de agendamento, o painel autenticado da profissional e uma área administrativa restrita da plataforma.
 
-O BeautyFlow será inicialmente desenvolvido como uma aplicação full-stack utilizando Next.js. Essa escolha reduz a complexidade do MVP e permite validar o produto mais rapidamente.
+## Componentes
 
----
+- **Next.js App Router:** páginas, Server Actions e Route Handlers.
+- **Supabase Auth:** login, recuperação de senha e gestão de sessão.
+- **Supabase Postgres:** empresas, perfis, serviços, clientes, agenda e registros operacionais.
+- **Asaas:** checkout e cobrança de sinais por subconta; faturamento SaaS pela conta-pai somente quando habilitado.
+- **Vercel:** execução da aplicação e das rotas agendadas em produção.
 
-## 2. Tecnologias principais
+Não há Prisma nem Mercado Pago no fluxo atual.
 
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- shadcn/ui
-- Supabase
-- PostgreSQL
-- Prisma
-- Mercado Pago
-- Vercel
+## Áreas da aplicação
 
----
+1. **Área pública:** descoberta do negócio, seleção de serviço e horário, identificação da cliente e pagamento de sinal quando exigido.
+2. **Painel da profissional:** agenda, clientes, serviços, financeiro e configurações da própria empresa.
+3. **Administração do SaaS:** empresas, assinaturas, isenções, reconciliação e auditoria, sempre protegidas por identidade administrativa e MFA.
 
-## 3. Estrutura da aplicação
+## Isolamento multiempresa
 
-O sistema será dividido em três áreas principais:
+Todos os recursos de negócio são associados a `company_id`. Consultas e mutações do painel combinam a identidade autenticada com o `company_id` do perfil e filtros explícitos no banco. As políticas RLS continuam sendo a última barreira de isolamento.
 
-### Área pública
+Credenciais Asaas de subcontas são criptografadas em repouso e só podem ser descriptografadas no servidor. Uma empresa nunca usa a credencial de outra empresa.
 
-Parte acessada pelas clientes das profissionais.
+## Separação financeira
 
-Exemplos:
+Existem dois domínios financeiros independentes:
 
-- página do estúdio;
-- catálogo de serviços;
-- escolha de data e horário;
-- dados da cliente;
-- pagamento do sinal;
-- confirmação do agendamento.
+- **Sinal do agendamento:** pertence à profissional e usa exclusivamente a credencial Asaas da subconta da empresa. O fluxo guarda `asaas_checkout_id` para o checkout e `asaas_payment_id` para a cobrança real.
+- **Mensalidade BeautyFlow:** pertence à plataforma e deve usar exclusivamente `ASAAS_PLATFORM_API_KEY` e `ASAAS_PLATFORM_API_URL`. Nunca reutiliza credenciais de subconta.
 
+O faturamento da plataforma nasce desativado. A migration proposta mantém `billing_enabled = false`; nenhuma cobrança ou bloqueio deve ocorrer antes de revisão, testes em Sandbox e aprovação explícita.
 
+## Estados de agendamento
 
-### Painel da profissional
+Os valores aceitos por `appointments.status` são:
 
-Parte protegida por login.
+- `pending_payment`
+- `confirmed`
+- `cancelled`
+- `completed`
+- `no_show`
+- `expired`
 
-Exemplos:
+O cancelamento usa sempre `cancelled`, com dois “l”. Os estados de pagamento usados pelo fluxo atual são `pending`, `received`, `not_required`, `expired` e `refunded`.
 
-- dashboard;
-- agenda;
-- serviços;
-- clientes;
-- configurações;
-- pagamentos.
+## Segurança e operação
 
+- Segredos existem somente em variáveis de ambiente ou colunas criptografadas.
+- Server Actions validam autenticação, empresa e entrada no servidor.
+- Webhooks e rotas internas exigem tokens próprios e registram idempotência.
+- Reconciliação limita o lote e só confirma um pagamento com associação inequívoca ao checkout/agendamento.
+- Operações externas irreversíveis, migrations e alterações de credenciais exigem aprovação e procedimento de rollback.
 
+## Variáveis principais
 
-### Área administrativa do SaaS
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ASAAS_API_URL`
+- `ASAAS_API_KEY` (conta-pai para administração de subcontas existente)
+- `ASAAS_WEBHOOK_TOKEN`
+- `ASAAS_ENCRYPTION_KEY`
+- `RECONCILIATION_SECRET`
+- `PLATFORM_ADMIN_EMAIL`
 
-Área reservada para a administração do BeautyFlow.
-
-Exemplos futuros:
-
-- gerenciamento de assinaturas;
-- gerenciamento de empresas;
-- suporte;
-- métricas de uso;
-- bloqueio de contas.
-
----
-
-
-
-## 4. Arquitetura inicial
-
-Fluxo principal:
-
-Cliente ou profissional
-
-↓
-
-Aplicação Next.js
-
-↓
-
-Rotas e ações do servidor
-
-↓
-
-Supabase e PostgreSQL
-
-↓
-
-Integrações externas
-
-- Mercado Pago
-- serviço de e-mail
-- WhatsApp
-
----
-
-
-
-## 5. Multiempresa
-
-O BeautyFlow será um sistema multiempresa.
-
-Cada negócio cadastrado será tratado como uma empresa independente.
-
-Toda informação importante deverá estar relacionada a um `company_id`.
-
-Exemplos:
-
-- serviços;
-- clientes;
-- profissionais;
-- agendamentos;
-- pagamentos;
-- configurações.
-
-Uma empresa nunca poderá visualizar ou alterar dados de outra empresa.
-
----
-
-
-
-## 6. Segurança
-
-- Nunca armazenar senhas diretamente no banco.
-- Nunca colocar chaves secretas no código.
-- Utilizar variáveis de ambiente.
-- Validar dados no servidor.
-- Verificar o acesso da empresa em todas as operações.
-- Utilizar autenticação do Supabase.
-- Proteger rotas administrativas.
-- Aplicar políticas de segurança no banco.
-
----
-
-
-
-## 7. Estrutura inicial de pastas
-
-```text
-
-beautyflow/
-
-├── docs/
-
-├── public/
-
-├── src/
-
-│   ├── app/
-
-│   ├── components/
-
-│   ├── lib/
-
-│   ├── services/
-
-│   ├── types/
-
-│   └── validations/
-
-├── .env.local
-
-├── package.json
-
-└── [README.md](http://README.md)
-```
-
+As variáveis de billing da plataforma devem ser distintas (`ASAAS_PLATFORM_API_URL`, `ASAAS_PLATFORM_API_KEY` e `ASAAS_PLATFORM_WEBHOOK_TOKEN`) antes de qualquer ativação futura.
