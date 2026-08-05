@@ -2,6 +2,8 @@ import { CalendarDays, Clock } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { PublicBookingFooter } from "@/components/public-booking-footer";
+
 import {
   Card,
   CardContent,
@@ -420,6 +422,7 @@ export default async function EscolherHorarioPage({
           </section>
         ) : null}
       </div>
+      <PublicBookingFooter />
     </main>
   );
 }

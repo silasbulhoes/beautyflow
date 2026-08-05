@@ -52,7 +52,10 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="password">Senha</Label>
+                <Link href="/esqueci-senha" className="text-xs underline-offset-4 hover:underline">Esqueci minha senha</Link>
+              </div>
 
               <Input
                 id="password"

@@ -12,10 +12,10 @@ export default function Home() {
           </Link>
 
           <Link
-            href="/login"
+            href="/planos"
             className={buttonVariants({ variant: "outline" })}
           >
-            Entrar
+            Ver planos
           </Link>
         </div>
       </header>

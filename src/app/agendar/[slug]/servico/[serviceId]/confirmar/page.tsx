@@ -2,6 +2,8 @@ import { CalendarDays, Clock } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { PublicBookingFooter } from "@/components/public-booking-footer";
+
 import { ConfirmationForm } from "./confirmation-form";
 
 import {
@@ -238,6 +240,7 @@ export default async function ConfirmarPage({
           </Card>
         </div>
       </div>
+      <PublicBookingFooter />
     </main>
   );
 }

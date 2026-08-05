@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 
+import { PublicBookingFooter } from "@/components/public-booking-footer";
+
 import {
   Card,
   CardContent,
@@ -427,6 +429,7 @@ export default async function PagamentoPage({
           </Card>
         </div>
       </div>
+      <PublicBookingFooter />
     </main>
   );
 }

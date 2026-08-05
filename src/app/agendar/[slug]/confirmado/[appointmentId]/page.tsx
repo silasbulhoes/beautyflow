@@ -2,6 +2,8 @@ import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { PublicBookingFooter } from "@/components/public-booking-footer";
+
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -138,6 +140,7 @@ export default async function ConfirmadoPage({
           </CardContent>
         </Card>
       </div>
+      <PublicBookingFooter />
     </main>
   );
 }
