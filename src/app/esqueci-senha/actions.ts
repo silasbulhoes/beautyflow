@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getApplicationUrl } from "@/lib/auth/password";
+import { headers } from "next/headers";
 
 export type ForgotPasswordState = {
   error?: string;
@@ -21,7 +22,8 @@ export async function solicitarRedefinicao(
   }
 
   const supabase = await createClient();
-  const redirectTo = `${getApplicationUrl()}/auth/callback?next=/redefinir-senha`;
+  const requestHeaders = await headers();
+  const redirectTo = `${getApplicationUrl(requestHeaders.get("origin"))}/auth/callback?next=/redefinir-senha`;
   const { error } = await supabase.auth.resetPasswordForEmail(
     email,
     { redirectTo },

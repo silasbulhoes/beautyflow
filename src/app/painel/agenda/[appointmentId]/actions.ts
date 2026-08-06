@@ -11,6 +11,7 @@ import {
 import { asaasRequest } from "@/lib/asaas/request";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getCancellationExternalOperation, getCancelledAppointmentState } from "@/lib/appointments/no-deposit-flow";
 
 export type AppointmentActionState = {
   error?: string;
@@ -228,10 +229,8 @@ export async function cancelarAgendamento(
     };
   }
 
-  const paymentWasReceived =
-    appointment.payment_status === "received" ||
-    appointment.payment_status === "confirmed" ||
-    appointment.payment_status === "refunded";
+  const externalOperation = getCancellationExternalOperation(appointment.payment_status, appointment.asaas_checkout_id);
+  const paymentWasReceived = externalOperation.requiresRefund;
 
   let refundWasCompleted = false;
 
@@ -388,7 +387,7 @@ export async function cancelarAgendamento(
       appointment.asaas_checkout_id ?? "",
     ).trim();
 
-    if (checkoutId) {
+    if (externalOperation.shouldCancelCheckout && checkoutId) {
       try {
         const credentials =
           await getCompanyAsaasCredentials(
@@ -426,15 +425,12 @@ export async function cancelarAgendamento(
     }
   }
 
-  const nextPaymentStatus = refundWasCompleted
-    ? "refunded"
-    : appointment.payment_status;
+  const cancelledState = getCancelledAppointmentState(appointment.payment_status, refundWasCompleted);
 
   let updateQuery = adminSupabase
     .from("appointments")
     .update({
-      status: "cancelled",
-      payment_status: nextPaymentStatus,
+      ...cancelledState,
     })
     .eq("id", appointment.id)
     .eq("company_id", profile.company_id)

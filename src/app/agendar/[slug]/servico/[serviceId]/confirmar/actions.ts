@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { PRIVACY_NOTICE_VERSION } from "@/lib/privacy";
 import { expireExpiredPendingAppointments } from "@/lib/appointments/expire-pending-appointment";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getInitialAppointmentPaymentState } from "@/lib/appointments/no-deposit-flow";
 
 export type ConfirmationState = {
   error?: string;
@@ -237,20 +238,9 @@ export async function confirmarAgendamento(
     service.price_cents,
   );
 
-  const depositPercentage = Math.min(
-    100,
-    Math.max(
-      0,
-      Number(service.deposit_percentage ?? 0),
-    ),
-  );
-
-  const depositAmount = Math.round(
-    priceInCents * (depositPercentage / 100),
-  );
-
-  const remainingAmount =
-    priceInCents - depositAmount;
+  const paymentState = getInitialAppointmentPaymentState(priceInCents, Number(service.deposit_percentage ?? 0));
+  const depositAmount = paymentState.depositAmountCents;
+  const remainingAmount = paymentState.remainingAmountCents;
 
   /*
    * Quando o sinal for maior que zero,
@@ -259,15 +249,9 @@ export async function confirmarAgendamento(
    * Quando o sinal for zero,
    * o agendamento é confirmado imediatamente.
    */
-  const requiresPayment = depositAmount > 0;
-
-  const appointmentStatus = requiresPayment
-    ? "pending_payment"
-    : "confirmed";
-
-  const paymentStatus = requiresPayment
-    ? "pending"
-    : "not_required";
+  const requiresPayment = paymentState.requiresPayment;
+  const appointmentStatus = paymentState.appointmentStatus;
+  const paymentStatus = paymentState.paymentStatus;
 
   const expiresAt = requiresPayment
     ? new Date(

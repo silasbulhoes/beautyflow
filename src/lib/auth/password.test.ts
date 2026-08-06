@@ -16,4 +16,14 @@ describe("password helpers", () => {
     expect(getApplicationUrl()).toBe("https://beautyflow.example");
     process.env.NEXT_PUBLIC_APP_URL = previous;
   });
+
+  it("prefere a origem segura da requisição no Preview", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://beautyflow-seven.vercel.app";
+    expect(getApplicationUrl("https://preview-beautyflow.vercel.app")).toBe("https://preview-beautyflow.vercel.app");
+  });
+
+  it("ignora protocolos inválidos na origem da requisição", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://beautyflow-seven.vercel.app";
+    expect(getApplicationUrl("javascript:alert(1)")).toBe("https://beautyflow-seven.vercel.app");
+  });
 });
