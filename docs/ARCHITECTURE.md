@@ -60,13 +60,15 @@ O cancelamento usa sempre `cancelled`, com dois “l”. Os estados de pagamento
 ## Variáveis principais
 
 - `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SECRET_KEY`
 - `ASAAS_API_URL`
 - `ASAAS_API_KEY` (conta-pai para administração de subcontas existente)
 - `ASAAS_WEBHOOK_TOKEN`
-- `ASAAS_ENCRYPTION_KEY`
+- `SUBACCOUNT_ENCRYPTION_KEY`
 - `RECONCILIATION_SECRET`
-- `PLATFORM_ADMIN_EMAIL`
+- `BEAUTYFLOW_ADMIN_EMAILS`
+- `NEXT_PUBLIC_APP_URL`
+- `PRIVACY_CONTACT_EMAIL`
 
 As variáveis de billing da plataforma devem ser distintas (`ASAAS_PLATFORM_API_URL`, `ASAAS_PLATFORM_API_KEY`, `ASAAS_PLATFORM_WEBHOOK_TOKEN` e `ASAAS_PLATFORM_ENVIRONMENT`) antes de qualquer ativação futura.

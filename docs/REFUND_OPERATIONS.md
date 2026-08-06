@@ -1,8 +1,8 @@
 # Operações de reembolso
 
-## Migration pendente
+## Migration aplicada
 
-O SQL completo está versionado em `supabase/migrations/202608050002_appointment_refund_operations.sql` e não foi aplicado.
+O SQL completo está versionado em `supabase/migrations/202608050002_appointment_refund_operations.sql` e foi aplicado com sucesso no Supabase em 06/08/2026.
 
 Impacto:
 
@@ -21,7 +21,7 @@ select to_regclass('public.appointment_refund_operations');
 select to_regprocedure('public.confirm_manual_appointment_refund(uuid,uuid,integer,text,text,uuid,text)');
 ```
 
-Ambas devem retornar `null` antes da aplicação.
+Ambas retornavam `null` antes da aplicação. Esta consulta permanece apenas como referência histórica.
 
 ## Verificação depois
 
