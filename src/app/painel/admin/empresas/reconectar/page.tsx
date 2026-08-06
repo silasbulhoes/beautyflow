@@ -13,16 +13,14 @@ export default function ReconnectAsaasPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Etapa 1 — validação somente leitura</CardTitle>
+          <CardTitle>Reconexão segura em duas etapas</CardTitle>
         </CardHeader>
         <CardContent>
           <ReconnectForm />
         </CardContent>
       </Card>
       <p className="text-sm text-amber-800">
-        A etapa de persistência não está disponível nesta tela. Depois da
-        validação, registre os quatro valores, revise o impacto e obtenha
-        aprovação explícita antes de criar a ação que atualiza o Supabase.
+        A persistência exige nova validação no Asaas, prévia mascarada, confirmação explícita, MFA e auditoria. Se a auditoria não estiver disponível, nenhuma alteração será feita.
       </p>
     </main>
   );

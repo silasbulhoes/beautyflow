@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ExemptionButton } from "./exemption-button";
+import { ReconciliationButton } from "./reconciliation-button";
 
 export default async function AdminCompaniesPage() {
   const admin = createAdminClient();
@@ -27,12 +28,15 @@ export default async function AdminCompaniesPage() {
             Mensalidades da plataforma são independentes dos sinais das clientes.
           </p>
         </div>
-        <Link
-          href="/painel/admin/empresas/reconectar"
-          className={buttonVariants({ variant: "outline" })}
-        >
-          Validar reconexão Asaas
-        </Link>
+        <div className="flex flex-wrap items-start gap-2">
+          <ReconciliationButton />
+          <Link
+            href="/painel/admin/empresas/reconectar"
+            className={buttonVariants({ variant: "outline" })}
+          >
+            Validar reconexão Asaas
+          </Link>
+        </div>
       </div>
       {error ? (
         <Card>

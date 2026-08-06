@@ -2,8 +2,61 @@
 
 import { revalidatePath } from "next/cache";
 import { isAdminEmail } from "@/lib/admin-access";
+import { reconcilePendingPayments } from "@/lib/appointments/reconcile-payments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+
+export type AdminReconciliationState = {
+  error?: string;
+  success?: string;
+};
+
+export async function reconciliarPagamentosPendentesAdmin(
+  _previousState: AdminReconciliationState,
+  _formData: FormData,
+): Promise<AdminReconciliationState> {
+  void _previousState;
+  void _formData;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user || !isAdminEmail(user.email)) {
+    return { error: "Não autorizado." };
+  }
+
+  const assurance =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+  if (
+    assurance.error ||
+    assurance.data.currentLevel !== "aal2"
+  ) {
+    return {
+      error: "Confirme o segundo fator antes da reconciliação.",
+    };
+  }
+
+  try {
+    const summary = await reconcilePendingPayments();
+    revalidatePath("/painel/admin/empresas");
+    revalidatePath("/painel/agenda");
+    revalidatePath("/painel/financeiro");
+
+    return {
+      success: `Reconciliação concluída: ${summary.checked} verificados, ${summary.confirmed} confirmados, ${summary.expired} expirados, ${summary.inconsistent} inconsistentes e ${summary.failed} falhas.`,
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível executar a reconciliação.",
+    };
+  }
+}
 
 export async function alterarIsencao(companyId: string, exempt: boolean) {
   const supabase = await createClient();

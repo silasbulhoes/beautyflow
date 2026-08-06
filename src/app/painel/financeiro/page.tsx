@@ -566,6 +566,7 @@ import {
         id,
         asaas_account_id,
         asaas_wallet_id,
+        asaas_api_key_encrypted,
         asaas_account_status
       `)
       .eq("id", profile.company_id)
@@ -576,8 +577,7 @@ import {
     }
   
     const accountIsConnected = Boolean(
-      company.asaas_account_id &&
-        company.asaas_wallet_id,
+      company.asaas_api_key_encrypted,
     );
   
     const integrationStatus = accountIsConnected
