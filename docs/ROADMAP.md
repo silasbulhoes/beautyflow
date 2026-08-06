@@ -154,4 +154,8 @@ Funcionalidades futuras:
 - [ ] Ativar e testar billing da plataforma em Sandbox.
 - [ ] Executar primeiro pagamento e estorno real após aprovação.
 - [ ] Habilitar enforcement somente após período de observação.
+- [x] Centralizar estados e visualização de estorno.
+- [x] Preparar histórico e confirmação transacional de reembolso manual.
+- [ ] Aplicar migration de reembolso após revisão e aprovação.
+- [ ] Validar estorno real de baixo valor fora da limitação observada no Sandbox.
 

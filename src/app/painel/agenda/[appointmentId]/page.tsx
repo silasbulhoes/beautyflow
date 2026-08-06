@@ -9,6 +9,7 @@ import {
   import { notFound, redirect } from "next/navigation";
   
   import { CancelButton } from "./cancel-button";
+  import { ManualRefundForm } from "./manual-refund-form";
   
   import { buttonVariants } from "@/components/ui/button";
   import {
@@ -19,6 +20,13 @@ import {
     CardTitle,
   } from "@/components/ui/card";
   import { createAdminClient } from "@/lib/supabase/admin";
+  import { getCompanyAsaasCredentials } from "@/lib/asaas/company-client";
+  import {
+    AsaasRefund,
+    getRefundDecision,
+    REFUND_STATE_CONTENT,
+  } from "@/lib/asaas/refunds";
+  import { asaasRequest } from "@/lib/asaas/request";
   import { createClient } from "@/lib/supabase/server";
   
   type AppointmentDetailsPageProps = {
@@ -26,6 +34,11 @@ import {
       appointmentId: string;
     }>;
   };
+
+  type AsaasPaymentResponse = { status?: string };
+  type AsaasRefundResponse =
+    | AsaasRefund[]
+    | { data?: AsaasRefund[] };
   
   function formatCurrency(valueInCents: number) {
     return new Intl.NumberFormat("pt-BR", {
@@ -168,6 +181,52 @@ import {
   
     const paymentWasReceived =
       appointment.payment_status === "received";
+
+    let refundState: ReturnType<typeof getRefundDecision>["state"] | null = null;
+    let refundLookupError = false;
+
+    if (paymentWasReceived && appointment.asaas_payment_id) {
+      try {
+        const credentials = await getCompanyAsaasCredentials(
+          profile.company_id,
+        );
+        const paymentId = encodeURIComponent(
+          appointment.asaas_payment_id,
+        );
+        const [payment, refundResponse] = await Promise.all([
+          asaasRequest<AsaasPaymentResponse>({
+            apiUrl: credentials.apiUrl,
+            apiKey: credentials.apiKey,
+            path: `/payments/${paymentId}`,
+          }),
+          asaasRequest<AsaasRefundResponse>({
+            apiUrl: credentials.apiUrl,
+            apiKey: credentials.apiKey,
+            path: `/payments/${paymentId}/refunds`,
+          }),
+        ]);
+        const refunds = Array.isArray(refundResponse)
+          ? refundResponse
+          : refundResponse.data ?? [];
+        refundState = getRefundDecision(payment.status, refunds).state;
+      } catch (error) {
+        refundLookupError = true;
+        console.error("Falha ao consultar estado do estorno:", {
+          appointmentId: appointment.id,
+          companyId: profile.company_id,
+          error:
+            error instanceof Error ? error.message : "Erro desconhecido",
+        });
+      }
+    }
+
+    const { data: refundHistory, error: refundHistoryError } =
+      await adminSupabase
+        .from("appointment_refund_operations")
+        .select("id, operation_type, status, amount_cents, observation, receipt_url, requested_at, completed_at")
+        .eq("appointment_id", appointment.id)
+        .eq("company_id", profile.company_id)
+        .order("created_at", { ascending: false });
   
     const canCancel =
       appointment.status === "confirmed" ||
@@ -419,6 +478,51 @@ import {
             </CardContent>
           </Card>
   
+          {refundState ? (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Estado da devolução</CardTitle>
+                <CardDescription>
+                  Situação consultada diretamente no Asaas.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="font-medium">
+                  {REFUND_STATE_CONTENT[refundState].label}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {REFUND_STATE_CONTENT[refundState].guidance}
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {refundLookupError ? (
+            <p className="mt-4 text-sm text-amber-800">
+              Não foi possível consultar o estado atual do estorno. Nenhum estado foi alterado.
+            </p>
+          ) : null}
+
+          {!refundHistoryError && (refundHistory?.length ?? 0) > 0 ? (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Histórico de reembolsos</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {refundHistory?.map((operation) => (
+                  <div key={operation.id} className="rounded-lg border p-3 text-sm">
+                    <p className="font-medium">
+                      {operation.operation_type === "manual" ? "Reembolso manual" : "Estorno Asaas"} — {operation.status}
+                    </p>
+                    <p>{formatCurrency(operation.amount_cents)}</p>
+                    {operation.observation ? <p className="text-muted-foreground">{operation.observation}</p> : null}
+                    {operation.receipt_url ? <a className="text-primary underline" href={operation.receipt_url} target="_blank" rel="noreferrer">Abrir comprovante</a> : null}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+
           {canCancel ? (
             <Card className="mt-6">
               <CardHeader>
@@ -444,11 +548,14 @@ import {
                   appointmentId={appointment.id}
                   paymentWasReceived={paymentWasReceived}
                 />
+
+                {paymentWasReceived && refundState === "cancelled" ? (
+                  <ManualRefundForm appointmentId={appointment.id} />
+                ) : null}
   
                 {paymentWasReceived ? (
                   <p className="text-center text-xs text-muted-foreground">
-                    O cancelamento não realiza estorno automático do
-                    sinal.
+                    O atendimento só será cancelado depois que o Asaas confirmar o estorno.
                   </p>
                 ) : null}
               </CardContent>

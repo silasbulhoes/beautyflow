@@ -19,5 +19,10 @@ O login usa Supabase Auth. Sinais de agendamentos usam exclusivamente a credenci
 - `docs/FIRST_REAL_PAYMENT_CHECKLIST.md`: primeiro pagamento real controlado.
 - `docs/OPERATIONS_RUNBOOK.md`: operação e reconciliação.
 - `docs/INCIDENT_RESPONSE.md`: resposta a incidentes.
+- `docs/REFUND_OPERATIONS.md`: estados de estorno e reembolso manual.
 
 Migrations ficam em `supabase/migrations/` e nunca devem ser aplicadas em produção sem revisão, backup e aprovação.
+
+## Qualidade
+
+Execute `npm test`, `npm run lint` e `npm run build`. Testes que dependem de e-mail, webhook público, análise cadastral ou movimentação financeira real permanecem manuais e estão nos checklists operacionais.

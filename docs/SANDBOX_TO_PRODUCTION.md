@@ -1,5 +1,16 @@
 # Sandbox para Produção
 
+Não transportar `accountId`, `walletId`, customer, checkout, payment, refund ou subscription do Sandbox. A conta do Studio atualmente opera com chave validada mesmo sem `accountId`/`walletId`; recursos dependentes de wallet, como split, ficam indisponíveis até recuperação oficial.
+
+Antes da troca:
+
+- configurar credenciais separadas para sinais e billing da plataforma;
+- validar que nenhuma variável pública contém segredo;
+- publicar webhook na Vercel e validar token/ambiente;
+- executar pagamento real de baixo valor e um único estorno controlado;
+- confirmar destino do sinal na conta da profissional;
+- manter enforcement de mensalidade desligado durante observação.
+
 1. Fazer backup lógico e registrar schema/constraints/RLS.
 2. Revisar migrations e aplicar primeiro em ambiente de homologação.
 3. Configurar URLs e chaves de Produção separadas das de Sandbox.

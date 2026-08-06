@@ -100,3 +100,7 @@ Revisar a migration `202608050001_platform_billing.sql`, validar backup/rollback
 - [ ] Marcar Studio BeautyFlow como isenta após exibir SQL/linha e obter aprovação.
 - [ ] Corrigir credencial da subconta após identificar e validar a conta correta.
 - [ ] Testar pagamentos e mensalidades no Sandbox com operações autorizadas.
+- [x] Tratar todos os estados de refund sem falso positivo.
+- [x] Preparar migration e fluxo de reembolso manual, sem aplicar.
+- [ ] Aplicar e verificar `202608050002_appointment_refund_operations.sql` após aprovação.
+- [ ] Repetir um único estorno real controlado antes da produção; o Sandbox cancelou seis tentativas mesmo com saldo suficiente.

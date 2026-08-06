@@ -55,6 +55,7 @@ O cancelamento usa sempre `cancelled`, com dois “l”. Os estados de pagamento
 - Webhooks e rotas internas exigem tokens próprios e registram idempotência.
 - Reconciliação limita o lote e só confirma um pagamento com associação inequívoca ao checkout/agendamento.
 - Operações externas irreversíveis, migrations e alterações de credenciais exigem aprovação e procedimento de rollback.
+- Estornos Asaas e reembolsos manuais possuem histórico próprio em `appointment_refund_operations`; um reembolso manual preserva o recebimento original em `payment_status` e registra separadamente a devolução.
 
 ## Variáveis principais
 
@@ -68,4 +69,4 @@ O cancelamento usa sempre `cancelled`, com dois “l”. Os estados de pagamento
 - `RECONCILIATION_SECRET`
 - `PLATFORM_ADMIN_EMAIL`
 
-As variáveis de billing da plataforma devem ser distintas (`ASAAS_PLATFORM_API_URL`, `ASAAS_PLATFORM_API_KEY` e `ASAAS_PLATFORM_WEBHOOK_TOKEN`) antes de qualquer ativação futura.
+As variáveis de billing da plataforma devem ser distintas (`ASAAS_PLATFORM_API_URL`, `ASAAS_PLATFORM_API_KEY`, `ASAAS_PLATFORM_WEBHOOK_TOKEN` e `ASAAS_PLATFORM_ENVIRONMENT`) antes de qualquer ativação futura.
