@@ -1,6 +1,10 @@
 -- Histórico separado de estornos Asaas e reembolsos manuais.
 -- Não altera a constraint de appointments.payment_status.
 
+begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
+
 create table if not exists public.appointment_refund_operations (
   id uuid primary key default gen_random_uuid(),
   appointment_id uuid not null references public.appointments(id) on delete restrict,
@@ -144,3 +148,5 @@ revoke all on function public.confirm_manual_appointment_refund(
 grant execute on function public.confirm_manual_appointment_refund(
   uuid, uuid, integer, text, text, uuid, text
 ) to service_role;
+
+commit;

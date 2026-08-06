@@ -1,6 +1,10 @@
 -- BeautyFlow platform billing foundation.
 -- Incremental migration: does not modify appointment or customer payment data.
 
+begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
+
 create table if not exists public.billing_plans (
   id uuid primary key default gen_random_uuid(),
   code text not null unique check (code in ('free', 'intermediate', 'advanced')),
@@ -85,6 +89,42 @@ create table if not exists public.admin_audit_logs (
   after_state jsonb,
   created_at timestamptz not null default now()
 );
+
+-- Pode ter sido criada manualmente antes desta migration. Acrescenta cada FK
+-- somente quando nenhuma FK equivalente já existe, independentemente do nome.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_attribute a
+      on a.attrelid = c.conrelid and a.attnum = any (c.conkey)
+    where c.conrelid = 'public.admin_audit_logs'::regclass
+      and c.contype = 'f'
+      and a.attname = 'actor_user_id'
+      and c.confrelid = 'auth.users'::regclass
+  ) then
+    alter table public.admin_audit_logs
+      add constraint admin_audit_logs_actor_user_id_fkey
+      foreign key (actor_user_id) references auth.users(id) on delete restrict;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_attribute a
+      on a.attrelid = c.conrelid and a.attnum = any (c.conkey)
+    where c.conrelid = 'public.admin_audit_logs'::regclass
+      and c.contype = 'f'
+      and a.attname = 'company_id'
+      and c.confrelid = 'public.companies'::regclass
+  ) then
+    alter table public.admin_audit_logs
+      add constraint admin_audit_logs_company_id_fkey
+      foreign key (company_id) references public.companies(id) on delete set null;
+  end if;
+end
+$$;
 create index if not exists admin_audit_logs_company_created_idx
   on public.admin_audit_logs (company_id, created_at desc);
 
@@ -131,10 +171,17 @@ create policy "company members read own subscription" on public.company_subscrip
     company_id = (select p.company_id from public.profiles p where p.id = auth.uid() and p.active = true)
   );
 
+revoke all on public.billing_plans from anon, authenticated;
+grant select on public.billing_plans to anon, authenticated;
 revoke all on public.company_subscriptions from anon, authenticated;
 grant select on public.company_subscriptions to authenticated;
 revoke all on public.platform_billing_events, public.admin_audit_logs,
   public.payment_reconciliation_runs, public.payment_reconciliation_issues from anon, authenticated;
+
+grant select, insert, update, delete on public.billing_plans,
+  public.company_subscriptions, public.platform_billing_events,
+  public.admin_audit_logs, public.payment_reconciliation_runs,
+  public.payment_reconciliation_issues to service_role;
 
 insert into public.billing_plans
   (code, name, description, monthly_price_cents, features, recommended, display_order)
@@ -148,3 +195,5 @@ comment on table public.company_subscriptions is
   'Mensalidade SaaS cobrada pela conta-pai; nunca representa sinais de agendamentos.';
 comment on column public.company_subscriptions.billing_enabled is
   'Deve permanecer false até ativação administrativa explícita da cobrança recorrente.';
+
+commit;
