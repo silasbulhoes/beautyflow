@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { exemptionLabel } from "@/lib/billing/exemptions";
 import { ExemptionButton } from "./exemption-button";
 import { ReconciliationButton } from "./reconciliation-button";
 
@@ -15,7 +16,7 @@ export default async function AdminCompaniesPage() {
   const { data: companies, error } = await admin
     .from("companies")
     .select(
-      "id, name, slug, email, active, created_at, asaas_account_id, asaas_account_status, company_subscriptions(id, status, billing_exempt, billing_enabled, next_due_date, billing_plans(name, monthly_price_cents))",
+      "id, name, slug, email, active, created_at, asaas_account_id, asaas_account_status, company_subscriptions(id, status, billing_exempt, billing_enabled, next_due_date, exemption_reason, exemption_ends_at, exemption_granted_at, billing_plans(code, name, monthly_price_cents))",
     )
     .order("created_at", { ascending: false });
 
@@ -66,15 +67,12 @@ export default async function AdminCompaniesPage() {
                   <div><p className="text-muted-foreground">Slug</p><p>{company.slug}</p></div>
                   <div><p className="text-muted-foreground">Asaas profissional</p><p>{company.asaas_account_status ?? "Não conectado"}</p></div>
                   <div><p className="text-muted-foreground">Plano</p><p>{plan?.name ?? "Não atribuído"}</p></div>
-                  <div><p className="text-muted-foreground">Mensalidade</p><p>{subscription?.billing_exempt ? "Isenta" : subscription?.status ?? "Pendente"}</p></div>
-                  {subscription ? (
-                    <div className="sm:col-span-2 lg:col-span-4">
-                      <ExemptionButton
-                        companyId={company.id}
-                        exempt={subscription.billing_exempt}
-                      />
-                    </div>
-                  ) : null}
+                  <div><p className="text-muted-foreground">Mensalidade</p><p>{exemptionLabel(Boolean(subscription?.billing_exempt), subscription?.exemption_ends_at ?? null) ?? subscription?.status ?? "Pendente"}</p></div>
+                  <div><p className="text-muted-foreground">billing_exempt</p><p>{subscription?.billing_exempt ? "true" : "false"}</p></div>
+                  <div><p className="text-muted-foreground">billing_enabled</p><p>{subscription?.billing_enabled ? "true" : "false"}</p></div>
+                  <div className="sm:col-span-2 lg:col-span-4">
+                    <ExemptionButton companyId={company.id} exempt={Boolean(subscription?.billing_exempt)} />
+                  </div>
                 </CardContent>
               </Card>
             );

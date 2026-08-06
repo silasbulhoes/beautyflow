@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isAdminEmail } from "@/lib/admin-access";
 import { reconcilePendingPayments } from "@/lib/appointments/reconcile-payments";
+import { validateExemptionAccess, validateGrantInput, validateRevokeInput } from "@/lib/billing/exemptions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -58,18 +59,50 @@ export async function reconciliarPagamentosPendentesAdmin(
   }
 }
 
-export async function alterarIsencao(companyId: string, exempt: boolean) {
+export type ExemptionActionState = { error?: string; success?: string };
+
+async function getExemptionContext(companyId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || !isAdminEmail(user.email)) throw new Error("Não autorizado.");
   const aal = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (aal.error || aal.data.currentLevel !== "aal2") throw new Error("Confirme o segundo fator antes desta alteração.");
   const admin = createAdminClient();
-  const { data: before } = await admin.from("company_subscriptions").select("id, status, billing_exempt, billing_enabled").eq("company_id", companyId).single();
-  if (!before) throw new Error("Assinatura da empresa não encontrada.");
-  const after = exempt ? { status: "exempt", billing_exempt: true, billing_enabled: false } : { status: "pending", billing_exempt: false, billing_enabled: false };
-  const { error } = await admin.from("company_subscriptions").update(after).eq("id", before.id).eq("company_id", companyId);
-  if (error) throw new Error("Não foi possível alterar a isenção.");
-  await admin.from("admin_audit_logs").insert({ actor_user_id: user.id, actor_email: user.email ?? "", company_id: companyId, action: exempt ? "billing_exemption_enabled" : "billing_exemption_disabled", target_type: "company_subscription", target_id: before.id, before_state: before, after_state: { ...before, ...after } });
-  revalidatePath("/painel/admin/empresas");
+  const [{ count: companyCount, error: companyError }, { count: subscriptionCount, error: subscriptionError }] = await Promise.all([
+    admin.from("companies").select("id", { count: "exact", head: true }).eq("id", companyId),
+    admin.from("company_subscriptions").select("id", { count: "exact", head: true }).eq("company_id", companyId),
+  ]);
+  if (companyError || subscriptionError) throw new Error("Não foi possível validar a empresa.");
+  validateExemptionAccess({ isAdmin: Boolean(user && isAdminEmail(user.email)), assuranceLevel: aal.error ? null : aal.data.currentLevel, companyCount: companyCount ?? 0, subscriptionCount: subscriptionCount ?? 0 });
+  if (!user) throw new Error("Não autorizado.");
+  return { admin, user };
+}
+
+export async function concederIsencao(_state: ExemptionActionState, formData: FormData): Promise<ExemptionActionState> {
+  try {
+    const companyId = String(formData.get("companyId") ?? "");
+    const planCode = String(formData.get("planCode") ?? "");
+    const { admin, user } = await getExemptionContext(companyId);
+    const { count, error: planError } = await admin.from("billing_plans").select("id", { count: "exact", head: true }).eq("code", planCode).eq("active", true);
+    if (planError) throw new Error("Não foi possível validar o plano.");
+    const input = validateGrantInput({ planCode, activePlanCount: count ?? 0, reason: String(formData.get("reason") ?? ""), endsAt: String(formData.get("endsAt") ?? ""), confirmation: String(formData.get("confirmation") ?? "") });
+    const { error } = await admin.rpc("grant_company_billing_exemption", { p_company_id: companyId, p_plan_code: input.planCode, p_reason: input.reason, p_ends_at: input.endsAt, p_actor_user_id: user.id, p_actor_email: user.email ?? "" });
+    if (error) throw new Error(`A isenção não foi gravada: ${error.message}`);
+    revalidatePath("/painel/admin/empresas");
+    return { success: "Isenção concedida com segurança." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Não foi possível conceder a isenção." };
+  }
+}
+
+export async function removerIsencao(_state: ExemptionActionState, formData: FormData): Promise<ExemptionActionState> {
+  try {
+    const companyId = String(formData.get("companyId") ?? "");
+    const { admin, user } = await getExemptionContext(companyId);
+    const input = validateRevokeInput({ reason: String(formData.get("reason") ?? ""), confirmation: String(formData.get("confirmation") ?? "") });
+    const { error } = await admin.rpc("revoke_company_billing_exemption", { p_company_id: companyId, p_reason: input.reason, p_actor_user_id: user.id, p_actor_email: user.email ?? "" });
+    if (error) throw new Error(`A isenção não foi removida: ${error.message}`);
+    revalidatePath("/painel/admin/empresas");
+    return { success: "Isenção removida. A cobrança continua desativada e aguarda ativação explícita." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Não foi possível remover a isenção." };
+  }
 }
