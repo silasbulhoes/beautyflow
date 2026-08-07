@@ -6,8 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export type CompanyAsaasCredentials = {
   apiKey: string;
   apiUrl: string;
-  accountId: string;
-  walletId: string;
+  accountId: string | null;
+  walletId: string | null;
   usingSubaccount: true;
 };
 
@@ -69,12 +69,9 @@ export async function getCompanyAsaasCredentials(
     company.asaas_api_key_encrypted ?? "",
   ).trim();
 
-  const hasCompleteSubaccount =
-    Boolean(accountId) &&
-    Boolean(walletId) &&
-    Boolean(encryptedApiKey);
+  const hasUsableCredential = Boolean(encryptedApiKey);
 
-  if (!hasCompleteSubaccount) {
+  if (!hasUsableCredential) {
     console.error(
       "Empresa sem integração financeira completa:",
       {
@@ -105,8 +102,8 @@ export async function getCompanyAsaasCredentials(
     return {
       apiKey,
       apiUrl,
-      accountId,
-      walletId,
+      accountId: accountId || null,
+      walletId: walletId || null,
       usingSubaccount: true,
     };
   } catch (error) {

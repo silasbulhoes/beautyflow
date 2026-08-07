@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 import { getCompanyAsaasCredentials } from "@/lib/asaas/company-client";
 import { asaasRequest } from "@/lib/asaas/request";
@@ -9,6 +10,7 @@ import {
   isPendingPaymentExpired,
 } from "@/lib/appointments/expire-pending-appointment";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getApplicationUrl } from "@/lib/auth/password";
 
 type CreateCheckoutState = {
   error?: string;
@@ -23,13 +25,6 @@ type AsaasCheckoutResponse = {
     description?: string;
   }>;
 };
-
-function getBaseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  );
-}
 
 function getCheckoutFallbackUrl(
   apiUrl: string,
@@ -139,7 +134,7 @@ export async function createAsaasCheckout(
   }
 
   if (
-    appointment.status === "canceled" ||
+    appointment.status === "cancelled" ||
     appointment.status === "expired" ||
     appointment.payment_status === "expired"
   ) {
@@ -214,7 +209,8 @@ export async function createAsaasCheckout(
     );
   }
 
-  const baseUrl = getBaseUrl().replace(/\/$/, "");
+  const requestHeaders = await headers();
+  const baseUrl = getApplicationUrl(requestHeaders.get("origin"));
 
   const payload = {
     billingTypes: ["PIX", "CREDIT_CARD"],

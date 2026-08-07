@@ -106,7 +106,7 @@ import {
       return "Aguardando pagamento";
     }
   
-    if (status === "canceled") {
+    if (status === "cancelled") {
       return "Cancelado";
     }
   
@@ -136,7 +136,7 @@ import {
       return "bg-amber-500/10 text-amber-700";
     }
   
-    if (status === "canceled") {
+    if (status === "cancelled") {
       return "bg-red-600/10 text-red-700";
     }
   

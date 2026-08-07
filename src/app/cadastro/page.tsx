@@ -82,10 +82,25 @@ export default function CadastroPage() {
                 type="password"
                 placeholder="Crie uma senha"
                 autoComplete="new-password"
-                minLength={6}
+                minLength={8}
                 required
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="passwordConfirmation">Confirmar senha</Label>
+              <Input id="passwordConfirmation" name="passwordConfirmation" type="password" autoComplete="new-password" minLength={8} required />
+            </div>
+
+            <label className="flex items-start gap-3 text-sm">
+              <input className="mt-1" type="checkbox" name="acceptedTerms" required />
+              <span>Li e aceito os Termos de Uso do BeautyFlow.</span>
+            </label>
+
+            <label className="flex items-start gap-3 text-sm">
+              <input className="mt-1" type="checkbox" name="acceptedPrivacy" required />
+              <span>Li e aceito o <Link href="/privacidade" className="underline">Aviso de Privacidade</Link>.</span>
+            </label>
 
             {state.error ? (
               <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

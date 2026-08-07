@@ -37,8 +37,8 @@ export function CancelButton({
       className="space-y-3"
       onSubmit={(event) => {
         const message = paymentWasReceived
-          ? "O sinal já foi pago. Cancelar o atendimento não fará o estorno automático. Deseja continuar?"
-          : "Deseja realmente cancelar este atendimento?";
+          ? "O sinal já foi pago. O atendimento só será cancelado depois que o Asaas confirmar o estorno. Deseja continuar?"
+          : "Deseja realmente cancelar este atendimento? Se houver um checkout de pagamento pendente, ele também será cancelado.";
 
         if (!window.confirm(message)) {
           event.preventDefault();

@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   UsersRound,
   WalletCards,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -51,11 +52,16 @@ const regularNavigationItems = [
     label: "Financeiro",
     icon: WalletCards,
   },
+  {
+    href: "/painel/configuracoes",
+    label: "Configurações",
+    icon: Settings,
+  },
 ];
 
 const adminNavigationItems = [
   {
-    href: "/painel/admin/subcontas",
+    href: "/painel/admin/empresas",
     label: "Admin",
     icon: ShieldCheck,
   },

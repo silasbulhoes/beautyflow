@@ -300,7 +300,7 @@ import {
       return "Aguardando pagamento";
     }
   
-    if (appointment.status === "canceled") {
+    if (appointment.status === "cancelled") {
       return "Cancelado";
     }
   
@@ -326,7 +326,7 @@ import {
       return "bg-amber-500/10 text-amber-800";
     }
   
-    if (appointment.status === "canceled") {
+    if (appointment.status === "cancelled") {
       return "bg-red-600/10 text-red-700";
     }
   
@@ -566,6 +566,7 @@ import {
         id,
         asaas_account_id,
         asaas_wallet_id,
+        asaas_api_key_encrypted,
         asaas_account_status
       `)
       .eq("id", profile.company_id)
@@ -576,8 +577,7 @@ import {
     }
   
     const accountIsConnected = Boolean(
-      company.asaas_account_id &&
-        company.asaas_wallet_id,
+      company.asaas_api_key_encrypted,
     );
   
     const integrationStatus = accountIsConnected
