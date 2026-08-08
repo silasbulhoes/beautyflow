@@ -74,7 +74,7 @@ export async function registrarReembolsoManual(
   const admin = createAdminClient();
   const { data: appointment, error } = await admin
     .from("appointments")
-    .select("id, company_id, status, payment_status, deposit_amount_cents, asaas_payment_id")
+    .select("id, company_id, status, payment_status, deposit_amount_cents, asaas_payment_id, asaas_environment")
     .eq("id", appointmentId)
     .eq("company_id", profile.company_id)
     .single();
@@ -194,7 +194,8 @@ export async function cancelarAgendamento(
         payment_status,
         deposit_amount_cents,
         asaas_checkout_id,
-        asaas_payment_id
+        asaas_payment_id,
+        asaas_environment
       `)
       .eq("id", appointmentId)
       .eq("company_id", profile.company_id)
@@ -254,6 +255,7 @@ export async function cancelarAgendamento(
       const credentials =
         await getCompanyAsaasCredentials(
           profile.company_id,
+          appointment.asaas_environment,
         );
 
       const payment = await asaasRequest<AsaasPayment>({
@@ -392,6 +394,7 @@ export async function cancelarAgendamento(
         const credentials =
           await getCompanyAsaasCredentials(
             profile.company_id,
+            appointment.asaas_environment,
           );
 
         await asaasRequest<Record<string, unknown>>({

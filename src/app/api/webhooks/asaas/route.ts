@@ -9,6 +9,7 @@ import {
   
   import { getCompanyAsaasCredentials } from "@/lib/asaas/company-client";
   import { asaasRequest } from "@/lib/asaas/request";
+  import { getProfessionalAsaasRuntime } from "@/lib/asaas/environment";
   import { createAdminClient } from "@/lib/supabase/admin";
   
   export const runtime = "nodejs";
@@ -103,6 +104,7 @@ import {
     appointmentId,
     paymentId,
     errorMessage,
+    environment,
   }: {
     eventRowId: string;
     status: AuditStatus;
@@ -110,6 +112,7 @@ import {
     appointmentId?: string | null;
     paymentId?: string | null;
     errorMessage?: string | null;
+    environment: "sandbox" | "production";
   }) {
     const supabase = createAdminClient();
   
@@ -127,7 +130,8 @@ import {
           errorMessage?.slice(0, 1000) ??
           null,
       })
-      .eq("id", eventRowId);
+      .eq("id", eventRowId)
+      .eq("asaas_environment", environment);
   
     if (error) {
       console.error(
@@ -146,11 +150,13 @@ import {
     paymentId,
     checkoutId,
     externalReference,
+    environment,
   }: {
     companyId: string | null;
     paymentId: string | null;
     checkoutId: string | null;
     externalReference: string | null;
+    environment: "sandbox" | "production";
   }) {
     const supabase = createAdminClient();
   
@@ -166,13 +172,15 @@ import {
       let query = supabase
         .from("appointments")
         .select(selectedColumns)
-        .eq("asaas_payment_id", paymentId);
+        .eq("asaas_payment_id", paymentId)
+        .eq("asaas_environment", environment);
   
       if (companyId) {
         query = query.eq(
           "company_id",
           companyId,
-        );
+        )
+        .eq("asaas_environment", environment);
       }
   
       const { data } =
@@ -211,7 +219,8 @@ import {
       let query = supabase
         .from("appointments")
         .select(selectedColumns)
-        .eq("id", externalReference);
+        .eq("id", externalReference)
+        .eq("asaas_environment", environment);
   
       if (companyId) {
         query = query.eq(
@@ -234,6 +243,7 @@ import {
   export async function POST(
     request: NextRequest,
   ) {
+    const runtime = getProfessionalAsaasRuntime();
     const expectedToken =
       process.env.ASAAS_WEBHOOK_TOKEN?.trim();
   
@@ -342,7 +352,7 @@ import {
       await supabase.rpc(
         "register_asaas_webhook_event",
         {
-          p_event_id: eventId,
+          p_event_id: `${runtime.environment}:${eventId}`,
           p_event_type: event,
           p_asaas_created_at:
             eventCreatedAt,
@@ -410,6 +420,24 @@ import {
   
     const eventRowId =
       registration.event_row_id;
+
+    const { data: isolatedEvent, error: eventEnvironmentError } = await supabase
+      .from("asaas_webhook_events")
+      .update({ asaas_environment: runtime.environment })
+      .eq("id", eventRowId)
+      .or(`asaas_environment.is.null,asaas_environment.eq.${runtime.environment}`)
+      .select("id")
+      .maybeSingle();
+
+    if (eventEnvironmentError || !isolatedEvent) {
+      console.error("Webhook recusado por falha ao fixar ambiente:", {
+        eventId,
+        environment: runtime.environment,
+        code: eventEnvironmentError?.code ?? null,
+        message: eventEnvironmentError?.message ?? "Evento nao encontrado no ambiente esperado.",
+      });
+      return NextResponse.json({ error: "Nao foi possivel isolar o ambiente do evento." }, { status: 500 });
+    }
   
     const confirmedEvents = new Set([
       "PAYMENT_CONFIRMED",
@@ -424,6 +452,7 @@ import {
         eventRowId,
         status: "ignored",
         paymentId,
+        environment: runtime.environment,
       });
   
       console.info(
@@ -446,30 +475,31 @@ import {
   
     try {
       if (accountId) {
-        const { data: company } =
+        const { data: connection } =
           await supabase
-            .from("companies")
-            .select("id")
+            .from("company_asaas_connections")
+            .select("company_id")
+            .eq("environment", runtime.environment)
             .eq(
-              "asaas_account_id",
+              "account_id",
               accountId,
             )
             .maybeSingle();
   
-        companyId = company?.id ?? null;
+        companyId = connection?.company_id ?? null;
       }
   
       let apiUrl =
         process.env.ASAAS_API_URL
           ?.replace(/\/$/, "");
   
-      let apiKey =
-        process.env.ASAAS_API_KEY;
+      let apiKey: string | undefined;
   
       if (companyId) {
         const credentials =
           await getCompanyAsaasCredentials(
             companyId,
+            runtime.environment,
           );
   
         apiUrl = credentials.apiUrl;
@@ -509,6 +539,7 @@ import {
         await findAppointment({
           companyId,
           paymentId,
+          environment: runtime.environment,
           checkoutId,
           externalReference,
         });
@@ -519,6 +550,7 @@ import {
           status: "unmatched",
           companyId,
           paymentId,
+          environment: runtime.environment,
           errorMessage:
             "Nenhum agendamento foi encontrado para o pagamento.",
         });
@@ -566,7 +598,8 @@ import {
           .eq(
             "company_id",
             appointment.company_id,
-          );
+          )
+          .eq("asaas_environment", runtime.environment);
   
       if (updateError) {
         throw new Error(
@@ -582,6 +615,7 @@ import {
         appointmentId:
           appointment.id,
         paymentId,
+        environment: runtime.environment,
       });
   
       console.info(
@@ -614,6 +648,7 @@ import {
         companyId,
         paymentId,
         errorMessage,
+        environment: runtime.environment,
       });
   
       console.error(

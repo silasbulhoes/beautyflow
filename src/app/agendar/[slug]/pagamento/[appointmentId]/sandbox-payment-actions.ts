@@ -141,7 +141,7 @@ export async function simularPagamentoSandbox(
 
   try {
     credentials =
-      await getCompanyAsaasCredentials(company.id);
+      await getCompanyAsaasCredentials(company.id, "sandbox");
   } catch (error) {
     console.error(
       "Erro ao acessar credenciais no teste Sandbox:",
@@ -156,9 +156,7 @@ export async function simularPagamentoSandbox(
     };
   }
 
-  const isSandbox = credentials.apiUrl.includes(
-    "api-sandbox.asaas.com",
-  );
+  const isSandbox = credentials.environment === "sandbox";
 
   if (!isSandbox) {
     return {

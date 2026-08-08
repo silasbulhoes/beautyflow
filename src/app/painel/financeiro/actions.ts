@@ -9,6 +9,7 @@ import {
 } from "@/lib/security/encryption";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getProfessionalAsaasRuntime } from "@/lib/asaas/environment";
 
 export type FinancialAccountState = {
   error?: string;
@@ -301,16 +302,18 @@ export async function criarChavePix(
   }
 
   const adminSupabase = createAdminClient();
+  const runtime = getProfessionalAsaasRuntime();
 
   const { data: company, error: companyError } =
     await adminSupabase
-      .from("companies")
+      .from("company_asaas_connections")
       .select(`
         id,
-        asaas_account_id,
-        asaas_api_key_encrypted
+        account_id,
+        api_key_encrypted
       `)
-      .eq("id", companyId)
+      .eq("company_id", companyId)
+      .eq("environment", runtime.environment)
       .maybeSingle();
 
   if (companyError) {
@@ -332,8 +335,8 @@ export async function criarChavePix(
   }
 
   if (
-    !company.asaas_account_id ||
-    !company.asaas_api_key_encrypted
+    !company.account_id ||
+    !company.api_key_encrypted
   ) {
     return {
       error:
@@ -341,8 +344,7 @@ export async function criarChavePix(
     };
   }
 
-  const asaasApiUrl =
-    process.env.ASAAS_API_URL?.replace(/\/$/, "");
+  const asaasApiUrl = runtime.apiUrl;
 
   if (!asaasApiUrl) {
     return {
@@ -355,7 +357,7 @@ export async function criarChavePix(
 
   try {
     subaccountApiKey = decryptSecret(
-      company.asaas_api_key_encrypted,
+      company.api_key_encrypted,
     );
   } catch (error) {
     console.error(
@@ -609,8 +611,8 @@ export async function criarContaFinanceira(
     };
   }
 
-  const asaasApiUrl =
-    process.env.ASAAS_API_URL?.replace(/\/$/, "");
+  const accountCreationRuntime = getProfessionalAsaasRuntime();
+  const asaasApiUrl = accountCreationRuntime.apiUrl;
 
   const asaasApiKey =
     process.env.ASAAS_API_KEY;
@@ -737,17 +739,16 @@ export async function criarContaFinanceira(
     data: updatedCompany,
     error: updateError,
   } = await adminSupabase
-    .from("companies")
-    .update({
-      asaas_account_id: responseData.id,
-      asaas_wallet_id: responseData.walletId,
-      asaas_api_key_encrypted: encryptedApiKey,
-      asaas_account_status: "pending",
-      asaas_onboarding_completed: false,
-      asaas_connected_at: new Date().toISOString(),
+    .from("company_asaas_connections")
+    .insert({
+      company_id: company.id,
+      environment: accountCreationRuntime.environment,
+      account_id: responseData.id,
+      wallet_id: responseData.walletId,
+      api_key_encrypted: encryptedApiKey,
+      account_status: "pending",
+      connected_at: new Date().toISOString(),
     })
-    .eq("id", company.id)
-    .is("asaas_account_id", null)
     .select("id")
     .maybeSingle();
 

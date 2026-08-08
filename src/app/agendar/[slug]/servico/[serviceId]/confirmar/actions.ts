@@ -7,6 +7,7 @@ import { PRIVACY_NOTICE_VERSION } from "@/lib/privacy";
 import { expireExpiredPendingAppointments } from "@/lib/appointments/expire-pending-appointment";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getInitialAppointmentPaymentState } from "@/lib/appointments/no-deposit-flow";
+import { getProfessionalAsaasRuntime } from "@/lib/asaas/environment";
 
 export type ConfirmationState = {
   error?: string;
@@ -277,6 +278,9 @@ export async function confirmarAgendamento(
 
         status: appointmentStatus,
         payment_status: paymentStatus,
+        asaas_environment: requiresPayment
+          ? getProfessionalAsaasRuntime().environment
+          : null,
 
         total_amount_cents: priceInCents,
         deposit_amount_cents: depositAmount,
