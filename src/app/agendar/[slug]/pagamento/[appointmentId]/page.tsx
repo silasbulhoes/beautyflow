@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { expirePendingAppointmentIfDue } from "@/lib/appointments/expire-pending-appointment";
+import { getProfessionalAsaasRuntime } from "@/lib/asaas/environment";
 
 import { PaymentButton } from "./payment-button";
 import { SandboxPaymentButton } from "./sandbox-payment-button";
@@ -150,10 +151,7 @@ export default async function PagamentoPage({
   const paymentReturnedAsSuccess =
     resultado === "sucesso";
 
-  const isAsaasSandbox =
-    process.env.ASAAS_API_URL?.includes(
-      "api-sandbox.asaas.com",
-    ) ?? false;
+  const isAsaasSandbox = getProfessionalAsaasRuntime().environment === "sandbox";
 
   return (
     <main className="min-h-screen bg-muted/30">

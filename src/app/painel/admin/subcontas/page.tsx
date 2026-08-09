@@ -11,6 +11,7 @@ import {
   import { notFound, redirect } from "next/navigation";
   
   import { asaasRequest } from "@/lib/asaas/request";
+  import { getProfessionalAsaasRuntime } from "@/lib/asaas/environment";
   import {
     Button,
     buttonVariants,
@@ -211,8 +212,7 @@ import {
       notFound();
     }
   
-    const asaasApiUrl =
-      process.env.ASAAS_API_URL?.replace(/\/$/, "");
+    const asaasApiUrl = getProfessionalAsaasRuntime().apiUrl;
   
     const parentApiKey =
       process.env.ASAAS_API_KEY;

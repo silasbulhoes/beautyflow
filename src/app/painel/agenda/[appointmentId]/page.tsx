@@ -151,6 +151,7 @@ import {
         remaining_amount_cents,
         paid_at,
         asaas_payment_id,
+        asaas_environment,
         clients (
           name,
           phone,
@@ -189,6 +190,7 @@ import {
       try {
         const credentials = await getCompanyAsaasCredentials(
           profile.company_id,
+          appointment.asaas_environment,
         );
         const paymentId = encodeURIComponent(
           appointment.asaas_payment_id,
@@ -223,7 +225,7 @@ import {
     const { data: refundHistory, error: refundHistoryError } =
       await adminSupabase
         .from("appointment_refund_operations")
-        .select("id, operation_type, status, amount_cents, observation, receipt_url, requested_at, completed_at")
+        .select("id, operation_type, status, amount_cents, observation, receipt_url, requested_at, completed_at, asaas_environment")
         .eq("appointment_id", appointment.id)
         .eq("company_id", profile.company_id)
         .order("created_at", { ascending: false });

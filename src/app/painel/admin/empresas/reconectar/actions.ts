@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isAdminEmail } from "@/lib/admin-access";
 import { asaasRequest } from "@/lib/asaas/request";
+import { getProfessionalAsaasRuntime, parseAsaasEnvironment } from "@/lib/asaas/environment";
 import { decryptSecret, encryptSecret } from "@/lib/security/encryption";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -63,10 +64,6 @@ function mask(value: string | null | undefined) {
   return `${normalized.slice(0, 4)}••••${normalized.slice(-4)}`;
 }
 
-function environmentFromUrl(apiUrl: string): "sandbox" | "production" {
-  return apiUrl.toLowerCase().includes("sandbox") ? "sandbox" : "production";
-}
-
 function walletIdFromResponse(wallet: WalletResponse) {
   if (typeof wallet === "string") return wallet.trim();
   return String(wallet.walletId ?? wallet.id ?? "").trim();
@@ -112,23 +109,28 @@ export async function validarReconexaoAsaas(
 ): Promise<ReconnectValidationState> {
   try {
     const user = await requireAdminAal2();
-    const apiUrl = process.env.ASAAS_API_URL?.replace(/\/$/, "");
+    const runtime = getProfessionalAsaasRuntime();
+    const requestedEnvironment = parseAsaasEnvironment(read(formData, "environment"));
     const apiKey = read(formData, "apiKey");
-    if (!apiUrl || !apiKey) return { error: "Informe a nova chave de API." };
+    if (requestedEnvironment !== runtime.environment) return { error: "Use o deployment configurado para o ambiente selecionado." };
+    if (!apiKey) return { error: "Informe a nova chave de API." };
 
-    const validated = await validateCredential(apiUrl, apiKey);
+    const validated = await validateCredential(runtime.apiUrl, apiKey);
     const admin = createAdminClient();
     const { data: company, error } = await admin.from("companies")
-      .select("id, slug, asaas_account_id, asaas_wallet_id, asaas_api_key_encrypted, asaas_account_status")
+      .select("id, slug")
       .eq("slug", TARGET_COMPANY_SLUG).single();
     if (error || !company) return { error: "A empresa studio-beautyflow não foi encontrada." };
 
+    const { data: connection } = await admin.from("company_asaas_connections")
+      .select("api_key_encrypted, account_id, wallet_id, account_status")
+      .eq("company_id", company.id).eq("environment", runtime.environment).maybeSingle();
     let currentKey = "";
     try {
-      currentKey = company.asaas_api_key_encrypted ? decryptSecret(company.asaas_api_key_encrypted) : "";
+      currentKey = connection?.api_key_encrypted ? decryptSecret(connection.api_key_encrypted) : "";
     } catch { currentKey = ""; }
 
-    const environment = environmentFromUrl(apiUrl);
+    const environment = runtime.environment;
     const preview: ReconnectPreview = {
       companyId: company.id,
       companySlug: company.slug,
@@ -136,9 +138,9 @@ export async function validarReconexaoAsaas(
       identity: validated.identity,
       current: {
         apiKey: mask(currentKey),
-        accountId: mask(company.asaas_account_id),
-        walletId: mask(company.asaas_wallet_id),
-        status: company.asaas_account_status ?? "(vazio)",
+        accountId: mask(connection?.account_id),
+        walletId: mask(connection?.wallet_id),
+        status: connection?.account_status ?? "(vazio)",
       },
       next: {
         apiKey: mask(apiKey),
@@ -146,7 +148,7 @@ export async function validarReconexaoAsaas(
         walletId: validated.identity.walletId ? mask(validated.identity.walletId) : "NULL",
         status: validated.status,
       },
-      updateStatement: `UPDATE public.companies SET asaas_api_key_encrypted = '[CRIPTOGRAFADA]', asaas_account_id = ${validated.identity.accountId ? "'[ID VALIDADO]'" : "NULL"}, asaas_wallet_id = ${validated.identity.walletId ? "'[WALLET VALIDADO]'" : "NULL"}, asaas_account_status = '${validated.status}', asaas_connected_at = now() WHERE id = '${company.id}' AND slug = '${TARGET_COMPANY_SLUG}';`,
+      updateStatement: `INSERT INTO public.company_asaas_connections (company_id, environment, api_key_encrypted, account_id, wallet_id, account_status, connected_at) VALUES ('${company.id}', '${environment}', '[CRIPTOGRAFADA]', ${validated.identity.accountId ? "'[ID VALIDADO]'" : "NULL"}, ${validated.identity.walletId ? "'[WALLET VALIDADO]'" : "NULL"}, '${validated.status}', now()) ON CONFLICT (company_id, environment) DO UPDATE SET api_key_encrypted = EXCLUDED.api_key_encrypted, account_id = EXCLUDED.account_id, wallet_id = EXCLUDED.wallet_id, account_status = EXCLUDED.account_status, connected_at = EXCLUDED.connected_at, updated_at = now();`,
     };
     const payload: ApprovalPayload = { version: 1, userId: user.id, companyId: company.id, apiKey, issuedAt: Date.now(), environment };
     return {
@@ -174,35 +176,42 @@ export async function persistirReconexaoAsaas(
     if (payload.version !== 1 || payload.userId !== user.id || Date.now() - payload.issuedAt > APPROVAL_TTL_MS) {
       return { error: "A aprovação expirou ou não pertence a este administrador. Valide novamente." };
     }
-    const apiUrl = process.env.ASAAS_API_URL?.replace(/\/$/, "");
-    if (!apiUrl || payload.environment !== environmentFromUrl(apiUrl)) {
+    const runtime = getProfessionalAsaasRuntime();
+    if (payload.environment !== runtime.environment) {
       return { error: "O ambiente Asaas mudou desde a validação. Nenhum dado foi salvo." };
     }
-    const validated = await validateCredential(apiUrl, payload.apiKey);
+    const validated = await validateCredential(runtime.apiUrl, payload.apiKey);
     const admin = createAdminClient();
     const { data: company } = await admin.from("companies")
-      .select("id, slug, asaas_account_id, asaas_wallet_id, asaas_api_key_encrypted, asaas_account_status")
+      .select("id, slug")
       .eq("id", payload.companyId).eq("slug", TARGET_COMPANY_SLUG).single();
     if (!company) return { error: "A empresa alvo não foi encontrada. Nenhum dado foi salvo." };
 
+    const { data: currentConnection } = await admin.from("company_asaas_connections")
+      .select("api_key_encrypted, account_id, wallet_id, account_status")
+      .eq("company_id", company.id).eq("environment", payload.environment).maybeSingle();
     const next = {
-      asaas_api_key_encrypted: encryptSecret(payload.apiKey),
-      asaas_account_id: validated.identity.accountId || null,
-      asaas_wallet_id: validated.identity.walletId || null,
-      asaas_account_status: validated.status,
-      asaas_connected_at: new Date().toISOString(),
+      company_id: company.id,
+      environment: payload.environment,
+      api_key_encrypted: encryptSecret(payload.apiKey),
+      account_id: validated.identity.accountId || null,
+      wallet_id: validated.identity.walletId || null,
+      account_status: validated.status,
+      connected_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
     const beforeState = {
-      asaas_api_key_encrypted: company.asaas_api_key_encrypted ? "[REDACTED]" : null,
-      asaas_account_id: company.asaas_account_id,
-      asaas_wallet_id: company.asaas_wallet_id,
-      asaas_account_status: company.asaas_account_status,
+      api_key_encrypted: currentConnection?.api_key_encrypted ? "[REDACTED]" : null,
+      account_id: currentConnection?.account_id ?? null,
+      wallet_id: currentConnection?.wallet_id ?? null,
+      account_status: currentConnection?.account_status ?? null,
+      environment: payload.environment,
     };
     const afterState = {
-      asaas_api_key_encrypted: "[REDACTED]",
-      asaas_account_id: next.asaas_account_id,
-      asaas_wallet_id: next.asaas_wallet_id,
-      asaas_account_status: next.asaas_account_status,
+      api_key_encrypted: "[REDACTED]",
+      account_id: next.account_id,
+      wallet_id: next.wallet_id,
+      account_status: next.account_status,
       environment: payload.environment,
       asaas_status_response: validated.rawStatus,
     };
@@ -212,16 +221,15 @@ export async function persistirReconexaoAsaas(
       actor_email: user.email ?? "",
       company_id: company.id,
       action: "asaas_company_credential_reconnection_approved",
-      target_type: "company",
-      target_id: company.id,
+      target_type: "company_asaas_connection",
+      target_id: `${company.id}:${payload.environment}`,
       before_state: beforeState,
       after_state: afterState,
     });
     if (auditError) return { error: "A auditoria não pôde ser criada; por segurança, a empresa não foi alterada." };
 
-    const { data: updated, error: updateError } = await admin.from("companies")
-      .update(next).eq("id", company.id).eq("slug", TARGET_COMPANY_SLUG)
-      .eq("asaas_api_key_encrypted", company.asaas_api_key_encrypted)
+    const { data: updated, error: updateError } = await admin.from("company_asaas_connections")
+      .upsert(next, { onConflict: "company_id,environment" })
       .select("id").maybeSingle();
     if (updateError || !updated) return { error: "A auditoria registrou a tentativa, mas a empresa não foi alterada. Valide o estado atual antes de tentar novamente." };
 

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
 import { getCompanyAsaasCredentials } from "@/lib/asaas/company-client";
+import { getAsaasCheckoutOrigin, getProfessionalAsaasRuntime } from "@/lib/asaas/environment";
 import { asaasRequest } from "@/lib/asaas/request";
 import {
   expirePendingAppointmentIfDue,
@@ -27,16 +28,10 @@ type AsaasCheckoutResponse = {
 };
 
 function getCheckoutFallbackUrl(
-  apiUrl: string,
+  environment: "sandbox" | "production",
   checkoutId: string,
 ) {
-  const isSandbox = apiUrl.includes("api-sandbox");
-
-  const checkoutDomain = isSandbox
-    ? "https://sandbox.asaas.com"
-    : "https://www.asaas.com";
-
-  return `${checkoutDomain}/checkoutSession/show/${checkoutId}`;
+  return `${getAsaasCheckoutOrigin(environment)}/checkoutSession/show/${checkoutId}`;
 }
 
 export async function createAsaasCheckout(
@@ -98,6 +93,7 @@ export async function createAsaasCheckout(
         expires_at,
         asaas_checkout_id,
         asaas_checkout_url,
+        asaas_environment,
         services (
           name,
           description
@@ -169,6 +165,10 @@ export async function createAsaasCheckout(
     appointment.asaas_checkout_id &&
     appointment.asaas_checkout_url
   ) {
+    const runtime = getProfessionalAsaasRuntime();
+    if (appointment.asaas_environment !== runtime.environment) {
+      return { error: "Este checkout pertence a outro ambiente Asaas." };
+    }
     redirect(appointment.asaas_checkout_url);
   }
 
@@ -178,7 +178,7 @@ export async function createAsaasCheckout(
 
   try {
     asaasCredentials =
-      await getCompanyAsaasCredentials(company.id);
+      await getCompanyAsaasCredentials(company.id, appointment.asaas_environment);
   } catch (error) {
     console.error(
       "Erro ao carregar credenciais financeiras:",
@@ -299,7 +299,7 @@ export async function createAsaasCheckout(
   const checkoutUrl =
     result.link ??
     getCheckoutFallbackUrl(
-      asaasCredentials.apiUrl,
+      asaasCredentials.environment,
       result.id,
     );
 
@@ -310,6 +310,7 @@ export async function createAsaasCheckout(
       asaas_checkout_url: checkoutUrl,
       payment_provider: "asaas",
       payment_status: "pending",
+      asaas_environment: asaasCredentials.environment,
     })
     .eq("id", appointment.id)
     .eq("company_id", company.id);

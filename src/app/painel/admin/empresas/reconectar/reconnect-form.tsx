@@ -52,6 +52,14 @@ export function ReconnectForm() {
           <div><dt className="text-muted-foreground">E-mail esperado</dt><dd>170114317@aluno.unb.br</dd></div>
         </dl>
         <label className="block space-y-1 text-sm">
+          <span>Ambiente da conexao</span>
+          <select name="environment" required defaultValue="sandbox" className="h-10 w-full rounded-md border bg-background px-3">
+            <option value="sandbox">Sandbox (usar no Preview)</option>
+            <option value="production">Producao (usar em Production)</option>
+          </select>
+          <span className="text-xs text-muted-foreground">O servidor recusara o ambiente que nao coincidir com ASAAS_ENVIRONMENT deste deployment.</span>
+        </label>
+        <label className="block space-y-1 text-sm">
           <span>Nova chave de API da conta existente</span>
           <Input name="apiKey" type="password" required autoComplete="new-password" />
         </label>
