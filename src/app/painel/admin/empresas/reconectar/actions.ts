@@ -3,14 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { isAdminEmail } from "@/lib/admin-access";
 import { asaasRequest } from "@/lib/asaas/request";
-import { getProfessionalAsaasRuntime, parseAsaasEnvironment } from "@/lib/asaas/environment";
+import { getAsaasApiUrlForEnvironment, parseAsaasEnvironment } from "@/lib/asaas/environment";
+import {
+  onlyDigits,
+  validateAsaasConnectionIdentity,
+} from "@/lib/asaas/connection-identity";
 import { decryptSecret, encryptSecret } from "@/lib/security/encryption";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const TARGET_COMPANY_SLUG = "studio-beautyflow";
-const EXPECTED_NAME = "SILAS RIBEIRO BULHOES DE SOUZA";
-const EXPECTED_EMAIL = "170114317@aluno.unb.br";
 const APPROVAL_PHRASE = "RECONectar STUDIO BEAUTYFLOW";
 const APPROVAL_TTL_MS = 10 * 60 * 1000;
 
@@ -18,7 +20,15 @@ export type ReconnectPreview = {
   companyId: string;
   companySlug: string;
   environment: "sandbox" | "production";
-  identity: { name: string; email: string; accountId: string; walletId: string };
+  identity: {
+    name: string;
+    email: string;
+    cpfCnpj: string;
+    accountId: string;
+    walletId: string;
+    registrationStatus: string;
+    comparison: string;
+  };
   current: { apiKey: string; accountId: string; walletId: string; status: string };
   next: { apiKey: string; accountId: string; walletId: string; status: string };
   updateStatement: string;
@@ -37,7 +47,15 @@ export type ReconnectPersistenceState = {
   success?: string;
 };
 
-type CommercialInfo = { id?: string; accountId?: string; name?: string; companyName?: string; email?: string };
+type CommercialInfo = {
+  id?: string;
+  accountId?: string;
+  name?: string;
+  companyName?: string;
+  email?: string;
+  cpfCnpj?: string;
+  document?: string;
+};
 type WalletResponse = { id?: string; walletId?: string } | string;
 type AccountStatus = { general?: string };
 type ApprovalPayload = {
@@ -47,14 +65,11 @@ type ApprovalPayload = {
   apiKey: string;
   issuedAt: number;
   environment: "sandbox" | "production";
+  expectedEmail: string;
 };
 
 function read(formData: FormData, field: string) {
   return String(formData.get(field) ?? "").trim();
-}
-
-function normalize(value: string) {
-  return value.trim().toLocaleUpperCase("pt-BR");
 }
 
 function mask(value: string | null | undefined) {
@@ -62,6 +77,19 @@ function mask(value: string | null | undefined) {
   if (!normalized) return "(vazio)";
   if (normalized.length <= 8) return "••••";
   return `${normalized.slice(0, 4)}••••${normalized.slice(-4)}`;
+}
+
+function maskDocument(value: string | null | undefined) {
+  const digits = onlyDigits(value);
+  if (!digits) return "(não retornado)";
+  return `${"•".repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+}
+
+function maskEmail(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim();
+  const separator = normalized.indexOf("@");
+  if (separator <= 1) return mask(normalized);
+  return `${normalized.slice(0, 2)}••••${normalized.slice(separator)}`;
 }
 
 function walletIdFromResponse(wallet: WalletResponse) {
@@ -85,22 +113,37 @@ async function requireAdminAal2() {
   return user;
 }
 
-async function validateCredential(apiUrl: string, apiKey: string) {
+async function validateCredential(input: {
+  apiUrl: string;
+  apiKey: string;
+  environment: "sandbox" | "production";
+  expected: { name: string | null; email: string | null; cpfCnpj: string | null };
+  proposedProductionEmail?: string;
+}) {
   const [commercial, wallet, status] = await Promise.all([
-    asaasRequest<CommercialInfo>({ apiUrl, apiKey, path: "/myAccount/commercialInfo/" }),
-    asaasRequest<WalletResponse>({ apiUrl, apiKey, path: "/wallets/" }),
-    asaasRequest<AccountStatus>({ apiUrl, apiKey, path: "/myAccount/status/" }),
+    asaasRequest<CommercialInfo>({ apiUrl: input.apiUrl, apiKey: input.apiKey, path: "/myAccount/commercialInfo/" }),
+    asaasRequest<WalletResponse>({ apiUrl: input.apiUrl, apiKey: input.apiKey, path: "/wallets/" }),
+    asaasRequest<AccountStatus>({ apiUrl: input.apiUrl, apiKey: input.apiKey, path: "/myAccount/status/" }),
   ]);
   const identity = {
     name: String(commercial.companyName ?? commercial.name ?? "").trim(),
     email: String(commercial.email ?? "").trim(),
+    cpfCnpj: onlyDigits(commercial.cpfCnpj ?? commercial.document),
     accountId: String(commercial.accountId ?? commercial.id ?? "").trim(),
     walletId: walletIdFromResponse(wallet),
   };
-  if (normalize(identity.name) !== normalize(EXPECTED_NAME) || normalize(identity.email) !== normalize(EXPECTED_EMAIL)) {
-    throw new Error("A chave não pertence à identidade financeira esperada do Studio BeautyFlow.");
-  }
-  return { identity, status: integrationStatus(status), rawStatus: status.general ?? null };
+  const comparison = validateAsaasConnectionIdentity({
+    environment: input.environment,
+    expected: input.expected,
+    returned: identity,
+    proposedProductionEmail: input.proposedProductionEmail,
+  });
+  return {
+    identity,
+    comparison,
+    status: integrationStatus(status),
+    rawStatus: String(status.general ?? "não retornado"),
+  };
 }
 
 export async function validarReconexaoAsaas(
@@ -109,13 +152,11 @@ export async function validarReconexaoAsaas(
 ): Promise<ReconnectValidationState> {
   try {
     const user = await requireAdminAal2();
-    const runtime = getProfessionalAsaasRuntime();
     const requestedEnvironment = parseAsaasEnvironment(read(formData, "environment"));
+    const apiUrl = getAsaasApiUrlForEnvironment(requestedEnvironment);
     const apiKey = read(formData, "apiKey");
-    if (requestedEnvironment !== runtime.environment) return { error: "Use o deployment configurado para o ambiente selecionado." };
+    const proposedProductionEmail = read(formData, "expectedProductionEmail");
     if (!apiKey) return { error: "Informe a nova chave de API." };
-
-    const validated = await validateCredential(runtime.apiUrl, apiKey);
     const admin = createAdminClient();
     const { data: company, error } = await admin.from("companies")
       .select("id, slug")
@@ -123,19 +164,38 @@ export async function validarReconexaoAsaas(
     if (error || !company) return { error: "A empresa studio-beautyflow não foi encontrada." };
 
     const { data: connection } = await admin.from("company_asaas_connections")
-      .select("api_key_encrypted, account_id, wallet_id, account_status")
-      .eq("company_id", company.id).eq("environment", runtime.environment).maybeSingle();
+      .select("api_key_encrypted, account_id, wallet_id, account_status, expected_name, expected_email, expected_cpf_cnpj")
+      .eq("company_id", company.id).eq("environment", requestedEnvironment).maybeSingle();
+    const validated = await validateCredential({
+      apiUrl,
+      apiKey,
+      environment: requestedEnvironment,
+      expected: {
+        name: connection?.expected_name ?? null,
+        email: connection?.expected_email ?? null,
+        cpfCnpj: connection?.expected_cpf_cnpj ?? null,
+      },
+      proposedProductionEmail,
+    });
     let currentKey = "";
     try {
       currentKey = connection?.api_key_encrypted ? decryptSecret(connection.api_key_encrypted) : "";
     } catch { currentKey = ""; }
 
-    const environment = runtime.environment;
+    const environment = requestedEnvironment;
     const preview: ReconnectPreview = {
       companyId: company.id,
       companySlug: company.slug,
       environment,
-      identity: validated.identity,
+      identity: {
+        ...validated.identity,
+        email: maskEmail(validated.identity.email),
+        cpfCnpj: maskDocument(validated.identity.cpfCnpj),
+        registrationStatus: validated.rawStatus,
+        comparison: validated.comparison.matchedBy === "cpf_cnpj"
+          ? "CPF/CNPJ confere com a identidade esperada deste ambiente."
+          : "E-mail financeiro confere com a identidade esperada deste ambiente.",
+      },
       current: {
         apiKey: mask(currentKey),
         accountId: mask(connection?.account_id),
@@ -148,12 +208,20 @@ export async function validarReconexaoAsaas(
         walletId: validated.identity.walletId ? mask(validated.identity.walletId) : "NULL",
         status: validated.status,
       },
-      updateStatement: `INSERT INTO public.company_asaas_connections (company_id, environment, api_key_encrypted, account_id, wallet_id, account_status, connected_at) VALUES ('${company.id}', '${environment}', '[CRIPTOGRAFADA]', ${validated.identity.accountId ? "'[ID VALIDADO]'" : "NULL"}, ${validated.identity.walletId ? "'[WALLET VALIDADO]'" : "NULL"}, '${validated.status}', now()) ON CONFLICT (company_id, environment) DO UPDATE SET api_key_encrypted = EXCLUDED.api_key_encrypted, account_id = EXCLUDED.account_id, wallet_id = EXCLUDED.wallet_id, account_status = EXCLUDED.account_status, connected_at = EXCLUDED.connected_at, updated_at = now();`,
+      updateStatement: `INSERT INTO public.company_asaas_connections (company_id, environment, api_key_encrypted, account_id, wallet_id, account_status, expected_name, expected_email, expected_cpf_cnpj, connected_at) VALUES ('${company.id}', '${environment}', '[CRIPTOGRAFADA]', ${validated.identity.accountId ? "'[ID VALIDADO]'" : "NULL"}, ${validated.identity.walletId ? "'[WALLET VALIDADO]'" : "NULL"}, '${validated.status}', '[TITULAR VALIDADO]', '[E-MAIL VALIDADO E MASCARADO]', ${validated.comparison.expectedCpfCnpj ? "'[CPF/CNPJ VALIDADO E MASCARADO]'" : "NULL"}, now()) ON CONFLICT (company_id, environment) DO UPDATE SET api_key_encrypted = EXCLUDED.api_key_encrypted, account_id = EXCLUDED.account_id, wallet_id = EXCLUDED.wallet_id, account_status = EXCLUDED.account_status, expected_name = COALESCE(company_asaas_connections.expected_name, EXCLUDED.expected_name), expected_email = COALESCE(company_asaas_connections.expected_email, EXCLUDED.expected_email), expected_cpf_cnpj = COALESCE(company_asaas_connections.expected_cpf_cnpj, EXCLUDED.expected_cpf_cnpj), connected_at = EXCLUDED.connected_at, updated_at = now();`,
     };
-    const payload: ApprovalPayload = { version: 1, userId: user.id, companyId: company.id, apiKey, issuedAt: Date.now(), environment };
+    const payload: ApprovalPayload = {
+      version: 1,
+      userId: user.id,
+      companyId: company.id,
+      apiKey,
+      issuedAt: Date.now(),
+      environment,
+      expectedEmail: validated.comparison.expectedEmail ?? "",
+    };
     return {
       success: "Credencial validada novamente. Revise a prévia e confirme explicitamente para persistir.",
-      identity: validated.identity,
+      identity: preview.identity,
       preview,
       approvalToken: encryptSecret(JSON.stringify(payload)),
     };
@@ -176,11 +244,8 @@ export async function persistirReconexaoAsaas(
     if (payload.version !== 1 || payload.userId !== user.id || Date.now() - payload.issuedAt > APPROVAL_TTL_MS) {
       return { error: "A aprovação expirou ou não pertence a este administrador. Valide novamente." };
     }
-    const runtime = getProfessionalAsaasRuntime();
-    if (payload.environment !== runtime.environment) {
-      return { error: "O ambiente Asaas mudou desde a validação. Nenhum dado foi salvo." };
-    }
-    const validated = await validateCredential(runtime.apiUrl, payload.apiKey);
+    const environment = parseAsaasEnvironment(payload.environment);
+    const apiUrl = getAsaasApiUrlForEnvironment(environment);
     const admin = createAdminClient();
     const { data: company } = await admin.from("companies")
       .select("id, slug")
@@ -188,15 +253,29 @@ export async function persistirReconexaoAsaas(
     if (!company) return { error: "A empresa alvo não foi encontrada. Nenhum dado foi salvo." };
 
     const { data: currentConnection } = await admin.from("company_asaas_connections")
-      .select("api_key_encrypted, account_id, wallet_id, account_status")
-      .eq("company_id", company.id).eq("environment", payload.environment).maybeSingle();
+      .select("api_key_encrypted, account_id, wallet_id, account_status, expected_name, expected_email, expected_cpf_cnpj")
+      .eq("company_id", company.id).eq("environment", environment).maybeSingle();
+    const validated = await validateCredential({
+      apiUrl,
+      apiKey: payload.apiKey,
+      environment,
+      expected: {
+        name: currentConnection?.expected_name ?? null,
+        email: currentConnection?.expected_email ?? null,
+        cpfCnpj: currentConnection?.expected_cpf_cnpj ?? null,
+      },
+      proposedProductionEmail: payload.expectedEmail,
+    });
     const next = {
       company_id: company.id,
-      environment: payload.environment,
+      environment,
       api_key_encrypted: encryptSecret(payload.apiKey),
       account_id: validated.identity.accountId || null,
       wallet_id: validated.identity.walletId || null,
       account_status: validated.status,
+      expected_name: currentConnection?.expected_name || validated.identity.name || null,
+      expected_email: currentConnection?.expected_email || validated.comparison.expectedEmail,
+      expected_cpf_cnpj: currentConnection?.expected_cpf_cnpj || null,
       connected_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -205,14 +284,20 @@ export async function persistirReconexaoAsaas(
       account_id: currentConnection?.account_id ?? null,
       wallet_id: currentConnection?.wallet_id ?? null,
       account_status: currentConnection?.account_status ?? null,
-      environment: payload.environment,
+      expected_name: currentConnection?.expected_name ?? null,
+      expected_email: currentConnection?.expected_email ? mask(currentConnection.expected_email) : null,
+      expected_cpf_cnpj: currentConnection?.expected_cpf_cnpj ? maskDocument(currentConnection.expected_cpf_cnpj) : null,
+      environment,
     };
     const afterState = {
       api_key_encrypted: "[REDACTED]",
       account_id: next.account_id,
       wallet_id: next.wallet_id,
       account_status: next.account_status,
-      environment: payload.environment,
+      expected_name: next.expected_name,
+      expected_email: next.expected_email ? mask(next.expected_email) : null,
+      expected_cpf_cnpj: next.expected_cpf_cnpj ? maskDocument(next.expected_cpf_cnpj) : null,
+      environment,
       asaas_status_response: validated.rawStatus,
     };
 
@@ -222,7 +307,7 @@ export async function persistirReconexaoAsaas(
       company_id: company.id,
       action: "asaas_company_credential_reconnection_approved",
       target_type: "company_asaas_connection",
-      target_id: `${company.id}:${payload.environment}`,
+      target_id: `${company.id}:${environment}`,
       before_state: beforeState,
       after_state: afterState,
     });
@@ -235,7 +320,7 @@ export async function persistirReconexaoAsaas(
 
     revalidatePath("/painel/admin/empresas");
     revalidatePath("/painel/financeiro");
-    return { success: "Reconexão persistida. Novos checkouts usarão a credencial validada do Studio BeautyFlow." };
+    return { success: `Conexão ${environment} persistida. Operações financeiras continuam usando o ambiente configurado no deployment.` };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "A reconexão não foi persistida." };
   }

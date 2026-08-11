@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,23 +42,31 @@ function PersistenceForm({ approvalToken }: { approvalToken: string }) {
 
 export function ReconnectForm() {
   const [state, action, pending] = useActionState(validarReconexaoAsaas, initialState);
+  const [environment, setEnvironment] = useState("sandbox");
 
   return (
     <div className="space-y-6">
       <form action={action} className="space-y-4">
         <dl className="grid gap-3 rounded-lg border p-4 text-sm sm:grid-cols-2">
           <div><dt className="text-muted-foreground">Empresa alvo</dt><dd>studio-beautyflow</dd></div>
-          <div><dt className="text-muted-foreground">Nome esperado</dt><dd>SILAS RIBEIRO BULHOES DE SOUZA</dd></div>
-          <div><dt className="text-muted-foreground">E-mail esperado</dt><dd>170114317@aluno.unb.br</dd></div>
+          <div><dt className="text-muted-foreground">Identidade</dt><dd>Separada por ambiente</dd></div>
+          <div><dt className="text-muted-foreground">Critério forte preferido</dt><dd>CPF/CNPJ previamente cadastrado</dd></div>
         </dl>
         <label className="block space-y-1 text-sm">
           <span>Ambiente da conexao</span>
-          <select name="environment" required defaultValue="sandbox" className="h-10 w-full rounded-md border bg-background px-3">
+          <select name="environment" required value={environment} onChange={(event) => setEnvironment(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3">
             <option value="sandbox">Sandbox (usar no Preview)</option>
             <option value="production">Producao (usar em Production)</option>
           </select>
-          <span className="text-xs text-muted-foreground">O servidor recusara o ambiente que nao coincidir com ASAAS_ENVIRONMENT deste deployment.</span>
+          <span className="text-xs text-muted-foreground">Esta seleção vale apenas para validar e armazenar a conexão. Operações financeiras continuam restritas ao ambiente do deployment.</span>
         </label>
+        {environment === "production" ? (
+          <label className="block space-y-1 text-sm">
+            <span>E-mail financeiro esperado em Produção</span>
+            <Input name="expectedProductionEmail" type="email" required autoComplete="off" />
+            <span className="text-xs text-muted-foreground">No primeiro cadastro, este e-mail deve coincidir com o retornado pelo Asaas. Ele só será salvo após a segunda validação, MFA, confirmação explícita e auditoria.</span>
+          </label>
+        ) : null}
         <label className="block space-y-1 text-sm">
           <span>Nova chave de API da conta existente</span>
           <Input name="apiKey" type="password" required autoComplete="new-password" />
@@ -76,6 +84,14 @@ export function ReconnectForm() {
       {state.preview ? (
         <div className="space-y-4">
           <h3 className="font-semibold">Prévia obrigatória — nenhuma escrita realizada</h3>
+          <dl className="grid gap-2 rounded-lg border p-4 text-sm sm:grid-cols-2">
+            <div><dt className="text-muted-foreground">Ambiente</dt><dd>{state.preview.environment}</dd></div>
+            <div><dt className="text-muted-foreground">Status cadastral</dt><dd>{state.preview.identity.registrationStatus}</dd></div>
+            <div><dt className="text-muted-foreground">Titular retornado</dt><dd>{state.preview.identity.name || "(não retornado)"}</dd></div>
+            <div><dt className="text-muted-foreground">E-mail retornado</dt><dd>{state.preview.identity.email}</dd></div>
+            <div><dt className="text-muted-foreground">CPF/CNPJ retornado</dt><dd>{state.preview.identity.cpfCnpj}</dd></div>
+            <div><dt className="text-muted-foreground">Comparação</dt><dd>{state.preview.identity.comparison}</dd></div>
+          </dl>
           <div className="grid gap-4 lg:grid-cols-2">
             <dl className="space-y-2 rounded-lg border p-4 text-sm">
               <dt className="font-medium">Valores atuais</dt>

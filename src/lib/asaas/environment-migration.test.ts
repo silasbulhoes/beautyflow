@@ -14,6 +14,14 @@ const reconciliation = readFileSync(
   resolve(process.cwd(), "src/lib/appointments/reconcile-payments.ts"),
   "utf8",
 );
+const reconnectAction = readFileSync(
+  resolve(process.cwd(), "src/app/painel/admin/empresas/reconectar/actions.ts"),
+  "utf8",
+);
+const parentConfig = readFileSync(
+  resolve(process.cwd(), "src/lib/asaas/parent-config.ts"),
+  "utf8",
+);
 
 describe("migration de isolamento Asaas", () => {
   it("permite credenciais distintas da mesma empresa por ambiente", () => {
@@ -52,5 +60,17 @@ describe("migration de isolamento Asaas", () => {
   it("reconciliacao seleciona e atualiza somente o ambiente da execucao", () => {
     expect(reconciliation).toContain('.eq("asaas_environment", runtime.environment)');
     expect(reconciliation).toContain("getCompanyAsaasCredentials(appointment.company_id, appointment.asaas_environment)");
+  });
+
+  it("permite pre-cadastrar outro ambiente apenas na reconexao administrativa", () => {
+    expect(reconnectAction).toContain("getAsaasApiUrlForEnvironment(requestedEnvironment)");
+    expect(reconnectAction).toContain("getAsaasApiUrlForEnvironment(environment)");
+    expect(reconnectAction).not.toContain("getProfessionalAsaasRuntime");
+  });
+
+  it("mantem a chave legada da conta-pai restrita ao Sandbox", () => {
+    expect(parentConfig).toContain('environment: "sandbox" as const');
+    expect(parentConfig).toContain('getAsaasApiUrlForEnvironment("sandbox")');
+    expect(parentConfig).not.toContain("ASAAS_API_URL");
   });
 });

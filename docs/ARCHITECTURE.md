@@ -63,7 +63,7 @@ O cancelamento usa sempre `cancelled`, com dois “l”. Os estados de pagamento
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
 - `ASAAS_API_URL`
-- `ASAAS_API_KEY` (conta-pai para administração de subcontas existente)
+- `ASAAS_API_KEY` (conta-pai legada Sandbox-only; nunca acompanha o runtime Production)
 - `ASAAS_WEBHOOK_TOKEN`
 - `SUBACCOUNT_ENCRYPTION_KEY`
 - `RECONCILIATION_SECRET`
@@ -72,3 +72,7 @@ O cancelamento usa sempre `cancelled`, com dois “l”. Os estados de pagamento
 - `PRIVACY_CONTACT_EMAIL`
 
 As variáveis de billing da plataforma devem ser distintas (`ASAAS_PLATFORM_API_URL`, `ASAAS_PLATFORM_API_KEY`, `ASAAS_PLATFORM_WEBHOOK_TOKEN` e `ASAAS_PLATFORM_ENVIRONMENT`) antes de qualquer ativação futura.
+
+A reconexão administrativa pode validar e pré-cadastrar uma conexão profissional de outro ambiente usando a URL oficial fixa escolhida no formulário. Essa exceção não se aplica a checkout, payment, refund, cancelamento, webhook ou reconciliação, que continuam presos a `ASAAS_ENVIRONMENT`.
+
+Para administrar futuramente uma conta-pai de Produção, criar um fluxo separado com `ASAAS_PARENT_API_KEY`, `ASAAS_PARENT_API_URL` e `ASAAS_PARENT_ENVIRONMENT`. Até essa mudança explícita, listagem, criação e recuperação de subcontas pela chave-pai legada permanecem forçadas ao Sandbox.

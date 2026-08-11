@@ -10,6 +10,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getProfessionalAsaasRuntime } from "@/lib/asaas/environment";
+import { getLegacySandboxParentAsaasConfig } from "@/lib/asaas/parent-config";
 
 export type FinancialAccountState = {
   error?: string;
@@ -611,11 +612,9 @@ export async function criarContaFinanceira(
     };
   }
 
-  const accountCreationRuntime = getProfessionalAsaasRuntime();
-  const asaasApiUrl = accountCreationRuntime.apiUrl;
-
-  const asaasApiKey =
-    process.env.ASAAS_API_KEY;
+  const parentConfig = getLegacySandboxParentAsaasConfig();
+  const asaasApiUrl = parentConfig.apiUrl;
+  const asaasApiKey = parentConfig.apiKey;
 
   if (!asaasApiUrl || !asaasApiKey) {
     return {
@@ -742,7 +741,7 @@ export async function criarContaFinanceira(
     .from("company_asaas_connections")
     .insert({
       company_id: company.id,
-      environment: accountCreationRuntime.environment,
+      environment: parentConfig.environment,
       account_id: responseData.id,
       wallet_id: responseData.walletId,
       api_key_encrypted: encryptedApiKey,
