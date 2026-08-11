@@ -57,7 +57,7 @@ export function ReconnectForm() {
             <option value="sandbox">Sandbox (usar no Preview)</option>
             <option value="production">Producao (usar em Production)</option>
           </select>
-          <span className="text-xs text-muted-foreground">O servidor recusara o ambiente que nao coincidir com ASAAS_ENVIRONMENT deste deployment.</span>
+          <span className="text-xs text-muted-foreground">Esta seleção vale apenas para validar e armazenar a conexão. Operações financeiras continuam restritas ao ambiente do deployment.</span>
         </label>
         <label className="block space-y-1 text-sm">
           <span>Nova chave de API da conta existente</span>

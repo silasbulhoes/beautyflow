@@ -2,6 +2,15 @@ export const ASAAS_ENVIRONMENTS = ["sandbox", "production"] as const;
 
 export type AsaasEnvironment = (typeof ASAAS_ENVIRONMENTS)[number];
 
+const ASAAS_API_URLS: Record<AsaasEnvironment, string> = {
+  sandbox: "https://api-sandbox.asaas.com/v3",
+  production: "https://api.asaas.com/v3",
+};
+
+export function getAsaasApiUrlForEnvironment(environment: AsaasEnvironment) {
+  return ASAAS_API_URLS[environment];
+}
+
 export function parseAsaasEnvironment(value: unknown): AsaasEnvironment {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (normalized === "sandbox" || normalized === "production") return normalized;

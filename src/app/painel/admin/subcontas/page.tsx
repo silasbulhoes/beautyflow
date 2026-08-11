@@ -11,7 +11,7 @@ import {
   import { notFound, redirect } from "next/navigation";
   
   import { asaasRequest } from "@/lib/asaas/request";
-  import { getProfessionalAsaasRuntime } from "@/lib/asaas/environment";
+  import { getLegacySandboxParentAsaasConfig } from "@/lib/asaas/parent-config";
   import {
     Button,
     buttonVariants,
@@ -212,10 +212,9 @@ import {
       notFound();
     }
   
-    const asaasApiUrl = getProfessionalAsaasRuntime().apiUrl;
-  
-    const parentApiKey =
-      process.env.ASAAS_API_KEY;
+    const parentConfig = getLegacySandboxParentAsaasConfig();
+    const asaasApiUrl = parentConfig.apiUrl;
+    const parentApiKey = parentConfig.apiKey;
   
     if (!asaasApiUrl || !parentApiKey) {
       return (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertAsaasEnvironment, environmentFromAsaasApiUrl, getProfessionalAsaasRuntime, parseAsaasEnvironment } from "./environment";
+import { assertAsaasEnvironment, environmentFromAsaasApiUrl, getAsaasApiUrlForEnvironment, getProfessionalAsaasRuntime, parseAsaasEnvironment } from "./environment";
 
 describe("isolamento de ambiente profissional Asaas", () => {
   it("aceita Preview configurado para Sandbox", () => {
@@ -7,6 +7,10 @@ describe("isolamento de ambiente profissional Asaas", () => {
   });
   it("aceita Production configurada para Producao", () => {
     expect(getProfessionalAsaasRuntime("production", "https://api.asaas.com/v3")).toEqual({ environment: "production", apiUrl: "https://api.asaas.com/v3" });
+  });
+  it("deriva a URL oficial somente do ambiente selecionado para provisionamento", () => {
+    expect(getAsaasApiUrlForEnvironment("sandbox")).toBe("https://api-sandbox.asaas.com/v3");
+    expect(getAsaasApiUrlForEnvironment("production")).toBe("https://api.asaas.com/v3");
   });
   it("bloqueia URL de Producao no Sandbox", () => {
     expect(() => getProfessionalAsaasRuntime("sandbox", "https://api.asaas.com/v3")).toThrow(/pertence a production/);

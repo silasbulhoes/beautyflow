@@ -135,9 +135,8 @@ async function main() {
     );
   }
 
-  const asaasApiUrl = requiredEnvironmentVariable(
-    "ASAAS_API_URL",
-  ).replace(/\/$/, "");
+  // A chave-pai legada e Sandbox-only. Este script nao pode operar em Producao.
+  const asaasApiUrl = "https://api-sandbox.asaas.com/v3";
 
   const parentApiKey = requiredEnvironmentVariable(
     "ASAAS_API_KEY",

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isAdminEmail } from "@/lib/admin-access";
 import { asaasRequest } from "@/lib/asaas/request";
-import { getProfessionalAsaasRuntime, parseAsaasEnvironment } from "@/lib/asaas/environment";
+import { getAsaasApiUrlForEnvironment, parseAsaasEnvironment } from "@/lib/asaas/environment";
 import { decryptSecret, encryptSecret } from "@/lib/security/encryption";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -109,13 +109,12 @@ export async function validarReconexaoAsaas(
 ): Promise<ReconnectValidationState> {
   try {
     const user = await requireAdminAal2();
-    const runtime = getProfessionalAsaasRuntime();
     const requestedEnvironment = parseAsaasEnvironment(read(formData, "environment"));
+    const apiUrl = getAsaasApiUrlForEnvironment(requestedEnvironment);
     const apiKey = read(formData, "apiKey");
-    if (requestedEnvironment !== runtime.environment) return { error: "Use o deployment configurado para o ambiente selecionado." };
     if (!apiKey) return { error: "Informe a nova chave de API." };
 
-    const validated = await validateCredential(runtime.apiUrl, apiKey);
+    const validated = await validateCredential(apiUrl, apiKey);
     const admin = createAdminClient();
     const { data: company, error } = await admin.from("companies")
       .select("id, slug")
@@ -124,13 +123,13 @@ export async function validarReconexaoAsaas(
 
     const { data: connection } = await admin.from("company_asaas_connections")
       .select("api_key_encrypted, account_id, wallet_id, account_status")
-      .eq("company_id", company.id).eq("environment", runtime.environment).maybeSingle();
+      .eq("company_id", company.id).eq("environment", requestedEnvironment).maybeSingle();
     let currentKey = "";
     try {
       currentKey = connection?.api_key_encrypted ? decryptSecret(connection.api_key_encrypted) : "";
     } catch { currentKey = ""; }
 
-    const environment = runtime.environment;
+    const environment = requestedEnvironment;
     const preview: ReconnectPreview = {
       companyId: company.id,
       companySlug: company.slug,
@@ -176,11 +175,9 @@ export async function persistirReconexaoAsaas(
     if (payload.version !== 1 || payload.userId !== user.id || Date.now() - payload.issuedAt > APPROVAL_TTL_MS) {
       return { error: "A aprovação expirou ou não pertence a este administrador. Valide novamente." };
     }
-    const runtime = getProfessionalAsaasRuntime();
-    if (payload.environment !== runtime.environment) {
-      return { error: "O ambiente Asaas mudou desde a validação. Nenhum dado foi salvo." };
-    }
-    const validated = await validateCredential(runtime.apiUrl, payload.apiKey);
+    const environment = parseAsaasEnvironment(payload.environment);
+    const apiUrl = getAsaasApiUrlForEnvironment(environment);
+    const validated = await validateCredential(apiUrl, payload.apiKey);
     const admin = createAdminClient();
     const { data: company } = await admin.from("companies")
       .select("id, slug")
@@ -189,10 +186,10 @@ export async function persistirReconexaoAsaas(
 
     const { data: currentConnection } = await admin.from("company_asaas_connections")
       .select("api_key_encrypted, account_id, wallet_id, account_status")
-      .eq("company_id", company.id).eq("environment", payload.environment).maybeSingle();
+      .eq("company_id", company.id).eq("environment", environment).maybeSingle();
     const next = {
       company_id: company.id,
-      environment: payload.environment,
+      environment,
       api_key_encrypted: encryptSecret(payload.apiKey),
       account_id: validated.identity.accountId || null,
       wallet_id: validated.identity.walletId || null,
@@ -205,14 +202,14 @@ export async function persistirReconexaoAsaas(
       account_id: currentConnection?.account_id ?? null,
       wallet_id: currentConnection?.wallet_id ?? null,
       account_status: currentConnection?.account_status ?? null,
-      environment: payload.environment,
+      environment,
     };
     const afterState = {
       api_key_encrypted: "[REDACTED]",
       account_id: next.account_id,
       wallet_id: next.wallet_id,
       account_status: next.account_status,
-      environment: payload.environment,
+      environment,
       asaas_status_response: validated.rawStatus,
     };
 
@@ -222,7 +219,7 @@ export async function persistirReconexaoAsaas(
       company_id: company.id,
       action: "asaas_company_credential_reconnection_approved",
       target_type: "company_asaas_connection",
-      target_id: `${company.id}:${payload.environment}`,
+      target_id: `${company.id}:${environment}`,
       before_state: beforeState,
       after_state: afterState,
     });
@@ -235,7 +232,7 @@ export async function persistirReconexaoAsaas(
 
     revalidatePath("/painel/admin/empresas");
     revalidatePath("/painel/financeiro");
-    return { success: "Reconexão persistida. Novos checkouts usarão a credencial validada do Studio BeautyFlow." };
+    return { success: `Conexão ${environment} persistida. Operações financeiras continuam usando o ambiente configurado no deployment.` };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "A reconexão não foi persistida." };
   }
