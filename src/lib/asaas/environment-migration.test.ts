@@ -57,6 +57,15 @@ describe("migration de isolamento Asaas", () => {
     expect(webhookRoute).toContain('p_event_id: `${runtime.environment}:${eventId}`');
   });
 
+  it("localiza a empresa pelo checkout antes de exigir a credencial no webhook", () => {
+    const appointmentLookup = webhookRoute.indexOf("const payloadAppointment = await findAppointment");
+    const credentialLookup = webhookRoute.indexOf("await getCompanyAsaasCredentials(");
+    expect(appointmentLookup).toBeGreaterThan(-1);
+    expect(credentialLookup).toBeGreaterThan(appointmentLookup);
+    expect(webhookRoute).toContain("companyId = payloadAppointment.company_id");
+    expect(webhookRoute).toMatch(/asaas_checkout_id[\s\S]*asaas_environment/);
+  });
+
   it("reconciliacao seleciona e atualiza somente o ambiente da execucao", () => {
     expect(reconciliation).toContain('.eq("asaas_environment", runtime.environment)');
     expect(reconciliation).toContain("getCompanyAsaasCredentials(appointment.company_id, appointment.asaas_environment)");

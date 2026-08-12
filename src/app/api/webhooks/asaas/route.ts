@@ -198,7 +198,8 @@ import {
         .eq(
           "asaas_checkout_id",
           checkoutId,
-        );
+        )
+        .eq("asaas_environment", environment);
   
       if (companyId) {
         query = query.eq(
@@ -488,6 +489,21 @@ import {
   
         companyId = connection?.company_id ?? null;
       }
+
+      // account.id do webhook identifica a conta Asaas, mas esse ID pode não
+      // estar disponível no provisionamento. O checkout já persistido é a
+      // correlação autoritativa e isolada por ambiente para descobrir a empresa.
+      const payloadAppointment = await findAppointment({
+        companyId,
+        paymentId,
+        checkoutId: payload.payment?.checkoutSession ?? null,
+        externalReference: payload.payment?.externalReference ?? null,
+        environment: runtime.environment,
+      });
+
+      if (!companyId && payloadAppointment) {
+        companyId = payloadAppointment.company_id;
+      }
   
       let apiUrl =
         process.env.ASAAS_API_URL
@@ -536,7 +552,7 @@ import {
         null;
   
       const appointment =
-        await findAppointment({
+        payloadAppointment ?? await findAppointment({
           companyId,
           paymentId,
           environment: runtime.environment,
